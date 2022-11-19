@@ -95,11 +95,17 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 			s.env,
 		))
 		{
+			// Users routes
 			securedApiRoutes.GET("/users", s.HandleApiListUsers())
 			securedApiRoutes.GET("/users/:id", s.HandleApiGetUser())
 			securedApiRoutes.PUT("/users/:id", s.HandleApiUpdateUser())
 			securedApiRoutes.DELETE("/users/:id", s.HandleApiDeleteUser())
 			securedApiRoutes.DELETE("/users/logout", s.HandleApiLogoutUser())
+
+			// Questions routes
+			securedApiRoutes.POST("/questions", s.HandleApiAddQuestion())
+			securedApiRoutes.GET("/questions", s.HandleApiListQuestions())
+			securedApiRoutes.GET("/questions/:id", s.HandleApiGetQuestion())
 		}
 	}
 
