@@ -26,14 +26,9 @@ type User struct {
 	Password                string      `json:"-"`
 	PasswordConfirmation    string      `json:"-"`
 	PasswordHash            string      `json:"-"`
-	Phone                   string      `json:"phone"`
-	PhoneVerified           bool        `json:"phone_verified"`
 	Status                  UserStatus  `json:"status"`
 	PasswordResetKey        null.String `json:"-"`
 	PasswordResetKeyExpiry  null.Time   `json:"-"`
-	PhoneActivationKey      null.String `json:"-"`
-	PhoneKeyExpiresAt       null.Time   `json:"-"`
-	PhoneActivationAttempts null.Int    `json:"phone_activation_attempts"`
 	EmailActivationKey      null.String `json:"-"`
 	EmailKeyExpiresAt       null.Time   `json:"-"`
 	EmailActivationAttempts null.Int    `json:"email_activation_attempts"`

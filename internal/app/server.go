@@ -16,13 +16,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Server is the admin server.
 type Server struct {
 	config *Config
 	env    *serverenv.ServerEnv
 }
 
-// NewServer makes a new admin console server.
 func NewServer(config *Config, env *serverenv.ServerEnv) (*Server, error) {
 	if env.Database() == nil {
 		return nil, fmt.Errorf("missing Database in server env")
@@ -76,34 +74,34 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 	mux.GET("/healthz", s.HandleHealthz())
 	mux.HEAD("/healthz", s.HandleHealthz())
 
-	// // Login pages
-	// publicRoutes.GET("/login", s.HandleLoginShow())
-	// publicRoutes.POST("/login", s.HandleLoginProcess())
-	// privateRoutes.GET("/logout", s.HandleLogout())
-	// privateRoutes.GET("/user-profile", s.HandleShowUserProfile())
+	// Login pages
+	publicRoutes.GET("/login", s.HandleLoginShow())
+	publicRoutes.POST("/login", s.HandleLoginProcess())
+	privateRoutes.GET("/logout", s.HandleLogout())
+	privateRoutes.GET("/user-profile", s.HandleShowUserProfile())
 
-	// // Register pages
-	// publicRoutes.GET("/register", s.HandleRegisterShow())
-	// publicRoutes.POST("/register", s.HandleRegisterProcess())
+	// Register pages
+	publicRoutes.GET("/register", s.HandleRegisterShow())
+	publicRoutes.POST("/register", s.HandleRegisterProcess())
 
-	// apiRoutes := mux.Group("/api/v1")
-	// {
-	// 	apiRoutes.POST("users", s.HandleAPIRegister())
-	// 	apiRoutes.POST("users/login", s.HandleAPILogin(sessionAuthenticator))
+	apiRoutes := mux.Group("/api/v1")
+	{
+		apiRoutes.POST("users", s.HandleAPIRegister())
+		apiRoutes.POST("users/login", s.HandleAPILogin(sessionAuthenticator))
 
-	// 	securedApiRoutes := apiRoutes.Group("")
-	// 	securedApiRoutes.Use(auth.AllowOnlyActiveUser(
-	// 		sessionAuthenticator,
-	// 		s.env,
-	// 	))
-	// 	{
-	// 		// securedApiRoutes.GET("/users", s.HandleApiListUsers())
-	// 		securedApiRoutes.GET("/users/:id", s.HandleApiGetUser())
-	// 		securedApiRoutes.PUT("/users/:id", s.HandleApiUpdateUser())
-	// 		securedApiRoutes.DELETE("/users/:id", s.HandleApiDeleteUser())
-	// 		securedApiRoutes.DELETE("/users/logout", s.HandleApiLogoutUser())
-	// 	}
-	// }
+		securedApiRoutes := apiRoutes.Group("")
+		securedApiRoutes.Use(auth.AllowOnlyActiveUser(
+			sessionAuthenticator,
+			s.env,
+		))
+		{
+			securedApiRoutes.GET("/users", s.HandleApiListUsers())
+			securedApiRoutes.GET("/users/:id", s.HandleApiGetUser())
+			securedApiRoutes.PUT("/users/:id", s.HandleApiUpdateUser())
+			securedApiRoutes.DELETE("/users/:id", s.HandleApiDeleteUser())
+			securedApiRoutes.DELETE("/users/logout", s.HandleApiLogoutUser())
+		}
+	}
 
 	mux.NoRoute(func(c *gin.Context) {
 		c.String(http.StatusNotFound, "Not found")

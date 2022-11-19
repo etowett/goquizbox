@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	createUserSQL        = `insert into users (username, first_name, last_name, email, email_verified, phone, phone_verified, status, password_hash, created_at) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning id`
-	updateUserSQL        = `update users set username=$1, first_name=$2, last_name=$3, email=$4, email_activation_key=$5, phone_activation_key=$6, status=$7, updated_at=$8 where id = $9`
-	getUsersSQL          = `select id, username, first_name, last_name, email, email_activation_key, email_verified, phone, phone_verified, status, password_hash, created_at, updated_at from users`
+	createUserSQL        = `insert into users (username, first_name, last_name, email, email_verified, status, password_hash, created_at) values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`
+	updateUserSQL        = `update users set username=$1, first_name=$2, last_name=$3, email=$4, email_activation_key=$5, status=$6, updated_at=$7 where id = $8`
+	getUsersSQL          = `select id, username, first_name, last_name, email, email_activation_key, email_verified, status, password_hash, created_at, updated_at from users`
 	getUserByIDSQL       = getUsersSQL + ` where id=$1`
 	getUserByUsernameSQL = getUsersSQL + ` where lower(username)=lower($1)`
 	getUserByEmailSQL    = getUsersSQL + ` where lower(email)=lower($1)`
@@ -27,13 +27,10 @@ const (
 	deleteUserSQL        = `delete from users where id=$1`
 )
 
-// UserDB is a handle to database operations for users
-// (referred to as healthAuthorityID in v1 publish API).
 type UserDB struct {
 	db *database.DB
 }
 
-// New creates a new UserDB that wraps a raw database handle.
 func NewUserDB(db *database.DB) *UserDB {
 	return &UserDB{
 		db: db,
@@ -107,7 +104,7 @@ func (u *UserDB) Save(ctx context.Context, m *model.User) error {
 		if m.IsNew() {
 			err := tx.QueryRow(
 				ctx, createUserSQL, m.Username, m.FirstName, m.LastName, m.Email,
-				m.EmailVerified, m.Phone, m.PhoneVerified, m.Status, m.PasswordHash, m.CreatedAt,
+				m.EmailVerified, m.Status, m.PasswordHash, m.CreatedAt,
 			).Scan(&m.ID)
 			if err != nil {
 				return fmt.Errorf("inserting user: %w", err)
@@ -116,7 +113,7 @@ func (u *UserDB) Save(ctx context.Context, m *model.User) error {
 		}
 		_, err := tx.Exec(
 			ctx, updateUserSQL, m.Username, m.FirstName, m.LastName, m.Email, m.EmailActivationKey,
-			m.PhoneActivationKey, m.Status, m.UpdatedAt, m.ID,
+			m.Status, m.UpdatedAt, m.ID,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to update user: %w", err)
@@ -158,25 +155,6 @@ func (u *UserDB) GetByEmail(ctx context.Context, email string) (*model.User, err
 		return nil
 	}); err != nil {
 		return nil, fmt.Errorf("get user by email: %w", err)
-	}
-
-	return user, nil
-}
-
-func (u *UserDB) GetByPhone(ctx context.Context, phone string) (*model.User, error) {
-	var user *model.User
-
-	if err := u.db.InTx(ctx, pgx.ReadCommitted, func(tx pgx.Tx) error {
-		row := tx.QueryRow(ctx, getUserByPhoneSQL, phone)
-
-		var err error
-		user, err = scanOneUser(row)
-		if err != nil {
-			return fmt.Errorf("failed to parse: %w", err)
-		}
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("get user by phone: %w", err)
 	}
 
 	return user, nil
@@ -256,8 +234,8 @@ func scanOneUser(row pgx.Row) (*model.User, error) {
 
 	if err := row.Scan(
 		&user.ID, &user.Username, &user.FirstName, &user.LastName, &user.Email,
-		&user.EmailActivationKey, &user.EmailVerified, &user.Phone, &user.PhoneVerified,
-		&user.Status, &user.PasswordHash, &user.Timestamps.CreatedAt, &user.Timestamps.UpdatedAt,
+		&user.EmailActivationKey, &user.EmailVerified, &user.Status, &user.PasswordHash,
+		&user.Timestamps.CreatedAt, &user.Timestamps.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
