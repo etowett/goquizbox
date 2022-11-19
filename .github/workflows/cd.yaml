@@ -1,0 +1,101 @@
+name: Build and deploy goquizbox
+
+on:
+  # push:
+  #   branches:
+  #   - main
+  workflow_dispatch:
+
+concurrency:
+  group: '${{ github.workflow }}-${{ github.head_ref || github.ref }}'
+  cancel-in-progress: true
+
+env:
+  PROJECT_ID: ${{ secrets.GKE_PROJECT }}
+  GKE_CLUSTER: unstable-main-cluster-gke
+  GKE_ZONE: europe-west1
+  IMAGE: goquizbox
+
+jobs:
+  build-push-deploy:
+    name: deploy
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v3
+
+    - id: 'auth'
+      name: 'Authenticate to Google Cloud'
+      uses: 'google-github-actions/auth@v1'
+      with:
+        credentials_json: '${{ secrets.GKE_SA_KEY }}'
+
+    # Install gcloud, `setup-gcloud` automatically picks up authentication from `auth`.
+    - name: 'Set up Cloud SDK'
+      uses: 'google-github-actions/setup-gcloud@v1'
+
+    - name: Configure Docker to use the gcloud command-line tool as a credential helper for authentication
+      run: |-
+        gcloud --quiet auth configure-docker
+
+    - name: Get the GKE credentials so we can deploy to the cluster
+      uses: 'google-github-actions/get-gke-credentials@v0'
+      with:
+        cluster_name: ${{ env.GKE_CLUSTER }}
+        location: ${{ env.GKE_ZONE }}
+        credentials: ${{ secrets.GKE_SA_KEY }}
+
+    - name: Declare docker tag variable
+      id: vars
+      shell: bash
+      run: |
+        GIT_HASH=$(git rev-parse --short "${GITHUB_SHA}")
+        echo "##[set-output name=docker_tag;]$(echo ${GITHUB_REF##*/}-${GIT_HASH})"
+
+    - name: Build container images
+      run: |-
+        docker build -f Dockerfile \
+          --tag "gcr.io/${PROJECT_ID}/${IMAGE}:${{ steps.vars.outputs.docker_tag }}" .
+        docker build -f Dockerfile.migrate \
+          --tag "gcr.io/${PROJECT_ID}/${IMAGE}-migrate:${{ steps.vars.outputs.docker_tag }}" .
+
+    - name: Push the Docker image to Google Container Registry
+      run: |-
+        docker push "gcr.io/${PROJECT_ID}/${IMAGE}:${{ steps.vars.outputs.docker_tag }}"
+        docker push "gcr.io/${PROJECT_ID}/${IMAGE}-migrate:${{ steps.vars.outputs.docker_tag }}"
+
+    - name: Set up helm
+      uses: azure/setup-helm@v3
+      with:
+        version: v3.10.1
+
+    - name: Add helm repo and deploy
+      run: |-
+        helm repo add --username etowett --password ${{ secrets.GITLAB_TOKEN }} citizix \
+          https://gitlab.com/api/v4/projects/33335039/packages/helm/stable
+        helm repo update
+        helm upgrade --install -i --debug goquizbox citizix/app \
+          --version 0.1.2 \
+          --namespace=live \
+          --create-namespace \
+          --wait \
+          --timeout 420s \
+          --set image.tag=${{ steps.vars.outputs.docker_tag }} \
+          --set hook.image.tag=${{ steps.vars.outputs.docker_tag }} \
+          -f deploy/helm/live.yaml
+
+    - name: Check rollout status
+      run: |-
+        kubectl rollout status -n live deployment.apps/goquizbox-app
+
+    - name: Notify slack of deploy status
+      uses: lazy-actions/slatify@master
+      if: always()
+      with:
+        type: ${{ job.status }}
+        job_name: "*goquizbox build - ${{ steps.vars.outputs.docker_tag }}*"
+        mention: 'here'
+        mention_if: 'failure'
+        channel: '#deploys'
+        url: ${{ secrets.SLACK_WEBHOOK }}

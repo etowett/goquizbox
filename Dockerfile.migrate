@@ -1,0 +1,8 @@
+FROM golang:1.19.3-alpine
+WORKDIR /migrations
+RUN apk update && \
+    apk add git bash && \
+    rm /var/cache/apk/*
+RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+COPY ./migrations .
+ENTRYPOINT ["/go/bin/migrate"]

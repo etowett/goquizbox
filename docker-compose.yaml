@@ -1,0 +1,48 @@
+version: '3.9'
+
+services:
+  app-air:
+    image: cosmtrek/air:v1.40.4
+    working_dir: /goquizbox
+    ports:
+      - 8090:8090
+    depends_on:
+      - db
+    environment:
+      - PORT=8090
+      - DB_NAME=goquizbox
+      - DB_USER=goquizbox
+      - DB_PASSWORD=goquizbox
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_SSLMODE=disable
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=pass1234
+      - REDIS_PORT=6379
+      - LOG_LEVEL=debug
+      - LOG_MODE=development
+      - ENV=local
+    volumes:
+      - .:/goquizbox
+    networks:
+      - goquizbox_net
+
+  db:
+    image: postgres:15.0-alpine
+    ports:
+      - 5432:5432
+    volumes:
+      - goquizbox_db:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=goquizbox
+      - POSTGRES_USER=goquizbox
+      - POSTGRES_DB=goquizbox
+    networks:
+      - goquizbox_net
+
+volumes:
+  goquizbox_db:
+  goquizbox_app:
+
+networks:
+  goquizbox_net:

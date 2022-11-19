@@ -1,0 +1,80 @@
+package observability
+
+import (
+	"context"
+	"fmt"
+
+	"goquizbox/pkg/logging"
+
+	"contrib.go.opencensus.io/exporter/ocagent"
+	"go.opencensus.io/stats/view"
+	"go.opencensus.io/trace"
+	"go.uber.org/zap"
+)
+
+var _ Exporter = (*opencensusExporter)(nil)
+
+type opencensusExporter struct {
+	exporter *ocagent.Exporter
+	config   *OpenCensusConfig
+	logger   *zap.SugaredLogger
+}
+
+// NewOpenCensus creates a new metrics and trace exporter for OpenCensus.
+func NewOpenCensus(ctx context.Context, config *OpenCensusConfig) (Exporter, error) {
+	logger := logging.FromContext(ctx).Named("opencensus")
+
+	var opts []ocagent.ExporterOption
+	if config.Insecure {
+		opts = append(opts, ocagent.WithInsecure())
+	}
+	if config.Endpoint != "" {
+		opts = append(opts, ocagent.WithAddress(config.Endpoint))
+	}
+
+	oc, err := ocagent.NewExporter(opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create opencensus exporter: %w", err)
+	}
+	return &opencensusExporter{
+		exporter: oc,
+		config:   config,
+		logger:   logger,
+	}, nil
+}
+
+// StartExporter starts the exporter.
+func (e *opencensusExporter) StartExporter() error {
+	e.logger.Debugw("starting observability exporter")
+	defer e.logger.Debugw("finished starting observability exporter")
+
+	trace.ApplyConfig(trace.Config{
+		DefaultSampler: trace.ProbabilitySampler(e.config.SampleRate),
+	})
+	trace.RegisterExporter(e.exporter)
+	view.RegisterExporter(e.exporter)
+
+	for _, v := range AllViews() {
+		if err := view.Register(v); err != nil {
+			return fmt.Errorf("failed to start opencensus exporter: view registration failed: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// Close halts the exporter.
+func (e *opencensusExporter) Close() error {
+	e.logger.Debugw("closing observability exporter")
+	defer e.logger.Debugw("finished closing observability exporter")
+
+	if err := e.exporter.Stop(); err != nil {
+		return fmt.Errorf("failed to stop exporter: %w", err)
+	}
+
+	// Unregister the exporter
+	trace.UnregisterExporter(e.exporter)
+	view.UnregisterExporter(e.exporter)
+
+	return nil
+}
