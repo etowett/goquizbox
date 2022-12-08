@@ -4,7 +4,6 @@ create type user_status as enum ('unverified', 'active', 'inactive');
 
 create table users (
   id bigserial primary key,
-  username varchar(255) not null,
   first_name varchar(225) not null,
   last_name varchar(225) not null,
   email varchar(255) not null,
@@ -17,10 +16,8 @@ create table users (
 );
 
 create unique index users_email_uniq_idx ON users(LOWER(email));
-create unique index users_username_uniq_idx ON users(LOWER(username));
 
 create index users_email_idx ON users(LOWER(email));
-create index users_username_idx ON users(LOWER(username));
 
 create table sessions (
   id bigserial primary key,
@@ -51,6 +48,17 @@ create table answers (
   user_id bigint references users(id),
   question_id bigint references questions(id),
   body text,
+  created_at timestamptz  not null default clock_timestamp(),
+  updated_at timestamptz
+);
+
+create type like_type as enum ('question', 'answer');
+
+create table likes (
+  id bigserial primary key,
+  user_id bigint references users(id),
+  type_id bigint references questions(id),
+  type varchar(20) not null,
   created_at timestamptz  not null default clock_timestamp(),
   updated_at timestamptz
 );

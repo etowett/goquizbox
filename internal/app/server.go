@@ -40,7 +40,8 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 
 	gob.Register(model.NewUser())
 
-	mux := gin.New()
+	mux := gin.Default()
+	// mux := gin.New()
 
 	// Recovery middleware recovers from any panics and writes a 500 if there was one.
 	mux.Use(gin.Recovery())
@@ -78,7 +79,7 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 	publicRoutes.GET("/login", s.HandleLoginShow())
 	publicRoutes.POST("/login", s.HandleLoginProcess())
 	privateRoutes.GET("/logout", s.HandleLogout())
-	privateRoutes.GET("/user-profile", s.HandleShowUserProfile())
+	publicRoutes.GET("/user-profile", s.HandleShowUserProfile())
 
 	// Register pages
 	publicRoutes.GET("/register", s.HandleRegisterShow())
@@ -88,6 +89,11 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 	{
 		apiRoutes.POST("users", s.HandleAPIRegister())
 		apiRoutes.POST("users/login", s.HandleAPILogin(sessionAuthenticator))
+		apiRoutes.GET("/users", s.HandleApiListUsers())
+		apiRoutes.GET("/users/:id", s.HandleApiGetUser())
+
+		apiRoutes.GET("/questions", s.HandleApiListQuestions())
+		apiRoutes.GET("/questions/:id", s.HandleApiGetQuestion())
 
 		securedApiRoutes := apiRoutes.Group("")
 		securedApiRoutes.Use(auth.AllowOnlyActiveUser(
@@ -95,17 +101,11 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 			s.env,
 		))
 		{
-			// Users routes
-			securedApiRoutes.GET("/users", s.HandleApiListUsers())
-			securedApiRoutes.GET("/users/:id", s.HandleApiGetUser())
 			securedApiRoutes.PUT("/users/:id", s.HandleApiUpdateUser())
 			securedApiRoutes.DELETE("/users/:id", s.HandleApiDeleteUser())
 			securedApiRoutes.DELETE("/users/logout", s.HandleApiLogoutUser())
 
-			// Questions routes
 			securedApiRoutes.POST("/questions", s.HandleApiAddQuestion())
-			securedApiRoutes.GET("/questions", s.HandleApiListQuestions())
-			securedApiRoutes.GET("/questions/:id", s.HandleApiGetQuestion())
 		}
 	}
 

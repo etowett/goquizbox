@@ -19,7 +19,6 @@ import (
 
 type (
 	userUpdateFormData struct {
-		Username  string `binding:"required" json:"username"`
 		Email     string `binding:"required" json:"email"`
 		FirstName string `binding:"required" json:"first_name"`
 		LastName  string `binding:"required" json:"last_name"`
@@ -28,7 +27,7 @@ type (
 
 func (s *Server) HandleShowUserProfile() func(c *gin.Context) {
 	return func(c *gin.Context) {
-		m := TemplateMap{}
+		m := getTemplateMap(c)
 		m.AddTitle("goquizbox - UserProfile")
 		m["user"] = sessions.Default(c).Get(userSessionkey)
 		c.HTML(http.StatusOK, "user_profile", m)
@@ -177,28 +176,8 @@ func (s *Server) HandleApiUpdateUser() func(c *gin.Context) {
 			return
 		}
 
-		if user.Username != form.Username {
-			userSearch, err := db.GetByUsername(ctx, form.Username)
-			if err != nil {
-				logger.Errorf("failed to get user by username %v: %v", form.Username, err)
-				c.JSON(http.StatusInternalServerError, map[string]interface{}{
-					"success": false,
-					"message": "could not get user for validation",
-				})
-				return
-			}
-			if userSearch != nil {
-				c.JSON(http.StatusConflict, map[string]interface{}{
-					"success": false,
-					"message": "that username is already in use",
-				})
-				return
-			}
-		}
-
 		user.FirstName = form.FirstName
 		user.LastName = form.LastName
-		user.Username = form.Username
 		user.Email = form.Email
 		user.UpdatedAt = null.TimeFrom(time.Now())
 

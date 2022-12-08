@@ -30,15 +30,15 @@ func MustNotBeLoggedIn(c *gin.Context) {
 	session := sessions.Default(c)
 	user := session.Get(userSessionkey)
 
-	// ctx := c.Request.Context()
-	// logger := logging.FromContext(ctx).Named("mustBeLoggedIn")
-
+	// logger := logging.FromContext(c.Request.Context()).Named("mustNotBeLoggedIn")
 	// logger.Infof("Path: %+v, User session key: %v", c.Request.URL.Path, user)
 
 	if user != nil {
-		c.Redirect(http.StatusMovedPermanently, "/dashboard")
-		c.Abort()
-		return
+		if c.Request.URL.Path != "/" {
+			c.Redirect(http.StatusMovedPermanently, "/")
+			c.Abort()
+			return
+		}
 	}
 	c.Next()
 }

@@ -106,6 +106,6 @@ migrate_up: ## Golang migrate up migrations
 	@echo "Done!"
 
 migrate_down: ## Golang migrate down migrations
-	@echo "Migrating up!"
+	@echo "Migrating down!"
 	@migrate -database $(DB_URL) -path $(MIGRATION_DIR) down
 	@echo "Done!"

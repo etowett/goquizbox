@@ -16,15 +16,14 @@ import (
 )
 
 const (
-	createUserSQL        = `insert into users (username, first_name, last_name, email, email_verified, status, password_hash, created_at) values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`
-	updateUserSQL        = `update users set username=$1, first_name=$2, last_name=$3, email=$4, email_activation_key=$5, status=$6, updated_at=$7 where id = $8`
-	getUsersSQL          = `select id, username, first_name, last_name, email, email_activation_key, email_verified, status, password_hash, created_at, updated_at from users`
-	getUserByIDSQL       = getUsersSQL + ` where id=$1`
-	getUserByUsernameSQL = getUsersSQL + ` where lower(username)=lower($1)`
-	getUserByEmailSQL    = getUsersSQL + ` where lower(email)=lower($1)`
-	getUserByPhoneSQL    = getUsersSQL + ` where phone=$1`
-	countUsersSQL        = "select count(id) from users"
-	deleteUserSQL        = `delete from users where id=$1`
+	createUserSQL     = `insert into users (first_name, last_name, email, email_verified, status, password_hash, created_at) values ($1, $2, $3, $4, $5, $6, $7) returning id`
+	updateUserSQL     = `update users set first_name=$1, last_name=$2, email=$3, email_activation_key=$4, status=$5, updated_at=$6 where id = $7`
+	getUsersSQL       = `select id, first_name, last_name, email, email_activation_key, email_verified, status, password_hash, created_at, updated_at from users`
+	getUserByIDSQL    = getUsersSQL + ` where id=$1`
+	getUserByEmailSQL = getUsersSQL + ` where lower(email)=lower($1)`
+	getUserByPhoneSQL = getUsersSQL + ` where phone=$1`
+	countUsersSQL     = "select count(id) from users"
+	deleteUserSQL     = `delete from users where id=$1`
 )
 
 type UserDB struct {
@@ -103,7 +102,7 @@ func (u *UserDB) Save(ctx context.Context, m *model.User) error {
 	return u.db.InTx(ctx, pgx.ReadCommitted, func(tx pgx.Tx) error {
 		if m.IsNew() {
 			err := tx.QueryRow(
-				ctx, createUserSQL, m.Username, m.FirstName, m.LastName, m.Email,
+				ctx, createUserSQL, m.FirstName, m.LastName, m.Email,
 				m.EmailVerified, m.Status, m.PasswordHash, m.CreatedAt,
 			).Scan(&m.ID)
 			if err != nil {
@@ -112,7 +111,7 @@ func (u *UserDB) Save(ctx context.Context, m *model.User) error {
 			return nil
 		}
 		_, err := tx.Exec(
-			ctx, updateUserSQL, m.Username, m.FirstName, m.LastName, m.Email, m.EmailActivationKey,
+			ctx, updateUserSQL, m.FirstName, m.LastName, m.Email, m.EmailActivationKey,
 			m.Status, m.UpdatedAt, m.ID,
 		)
 		if err != nil {
@@ -122,26 +121,7 @@ func (u *UserDB) Save(ctx context.Context, m *model.User) error {
 	})
 }
 
-func (u *UserDB) GetByUsername(ctx context.Context, username string) (*model.User, error) {
-	var user *model.User
-
-	if err := u.db.InTx(ctx, pgx.ReadCommitted, func(tx pgx.Tx) error {
-		row := tx.QueryRow(ctx, getUserByUsernameSQL, username)
-
-		var err error
-		user, err = scanOneUser(row)
-		if err != nil {
-			return fmt.Errorf("failed to parse: %w", err)
-		}
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("get user by username: %w", err)
-	}
-
-	return user, nil
-}
-
-func (u *UserDB) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+func (u *UserDB) ByEmail(ctx context.Context, email string) (*model.User, error) {
 	var user *model.User
 
 	if err := u.db.InTx(ctx, pgx.ReadCommitted, func(tx pgx.Tx) error {
@@ -199,7 +179,7 @@ func (u *UserDB) buildQuery(
 	counter := util.NewPlaceholder()
 
 	if filter.Term != "" {
-		filterColumns := []string{"first_name", "last_name", "email", "username", "phone"}
+		filterColumns := []string{"first_name", "last_name", "email"}
 		likeStatements := make([]string, 0)
 
 		args = append(args, strings.ToLower(filter.Term))
@@ -233,8 +213,8 @@ func scanOneUser(row pgx.Row) (*model.User, error) {
 	user := model.NewUser()
 
 	if err := row.Scan(
-		&user.ID, &user.Username, &user.FirstName, &user.LastName, &user.Email,
-		&user.EmailActivationKey, &user.EmailVerified, &user.Status, &user.PasswordHash,
+		&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.EmailActivationKey,
+		&user.EmailVerified, &user.Status, &user.PasswordHash,
 		&user.Timestamps.CreatedAt, &user.Timestamps.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

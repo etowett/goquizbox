@@ -25,7 +25,6 @@ const (
 
 type (
 	registerFormData struct {
-		Username             string `json:"username" form:"username" binding:"required"`
 		FirstName            string `json:"first_name" form:"first_name" binding:"required"`
 		LastName             string `json:"last_name" form:"last_name" binding:"required"`
 		Email                string `json:"email" form:"email" binding:"required"`
@@ -34,14 +33,13 @@ type (
 	}
 
 	loginFormData struct {
-		Username string `form:"username" json:"username" binding:"required"`
+		Email    string `form:"email" json:"email" binding:"required"`
 		Password string `form:"password" json:"password" binding:"required"`
 		Remember bool   `form:"remember"`
 	}
 )
 
 func (f *registerFormData) PopulateUser(a *model.User) {
-	a.Username = f.Username
 	a.FirstName = f.FirstName
 	a.LastName = f.LastName
 	a.Email = f.Email
@@ -53,7 +51,7 @@ func (f *registerFormData) PopulateUser(a *model.User) {
 }
 
 func (f *loginFormData) PopulateLogin(a *model.Login) {
-	a.Username = strings.TrimSpace(f.Username)
+	a.Email = strings.TrimSpace(f.Email)
 	a.Password = strings.TrimSpace(f.Password)
 	a.Remember = f.Remember
 }
@@ -72,14 +70,14 @@ func (s *Server) validateUserLogin(
 	}
 
 	db := database.NewUserDB(s.env.Database())
-	theUser, err := db.GetByUsername(ctx, newlogin.Username)
+	theUser, err := db.ByEmail(ctx, newlogin.Email)
 	if err != nil {
-		logger.Errorf("get user by username failed: %v", err)
-		return []string{"encountered error searching user by username"}, theUser, dbSession
+		logger.Errorf("get user by email failed: %v", err)
+		return []string{"encountered error searching user by email"}, theUser, dbSession
 	}
 
 	if theUser == nil {
-		return []string{"invalid username provided"}, theUser, dbSession
+		return []string{"that email could not be found"}, theUser, dbSession
 	}
 
 	err = util.MatchPassword(theUser.PasswordHash, newlogin.Password)
@@ -113,7 +111,7 @@ func (s *Server) validateUserLogin(
 
 func (s *Server) HandleLoginShow() func(c *gin.Context) {
 	return func(c *gin.Context) {
-		m := TemplateMap{}
+		m := getTemplateMap(c)
 		m.AddTitle("GoQuizbox - Login")
 		c.HTML(http.StatusOK, "login", m)
 	}
@@ -122,13 +120,14 @@ func (s *Server) HandleLoginShow() func(c *gin.Context) {
 func (s *Server) HandleLoginProcess() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		m := TemplateMap{}
+		m := getTemplateMap(c)
 		logger := logging.FromContext(ctx).Named("handleLoginProcess")
 
 		var form loginFormData
-		err := c.Bind(&form)
+		err := c.ShouldBind(&form)
 		if err != nil {
-			ErrorPage(c, err.Error())
+			logger.Errorf("invalid login form: %v", err)
+			ErrorPage(c, "invalid login form provided")
 			return
 		}
 
@@ -196,21 +195,49 @@ func (s *Server) HandleLogout() func(c *gin.Context) {
 		logger := logging.FromContext(ctx).Named("handleLogout")
 
 		// TODO: Deactivate session in DB
+		// tokenInfo := ctxhelper.TokenInfo(ctx)
+
+		// db := database.NewSessionDB(s.env.Database())
+		// session, err := db.GetSessionByID(ctx, tokenInfo.SessionID)
+		// if err != nil {
+		// 	logger.Errorf("failed to get session by id %v, %v", tokenInfo.SessionID, err)
+		// 	c.JSON(http.StatusInternalServerError, map[string]interface{}{
+		// 		"success": false,
+		// 		"message": "an internal error occured fetching session",
+		// 	})
+		// 	return
+		// }
+
+		// if session.UserID != tokenInfo.UserID {
+		// 	c.JSON(http.StatusBadRequest, map[string]interface{}{
+		// 		"success": false,
+		// 		"message": fmt.Sprintf("cannot logout session=[%v] by user=[%v]", tokenInfo.SessionID, tokenInfo.UserID),
+		// 	})
+		// 	return
+		// }
+
+		// if session.DeactivatedAt.Valid {
+		// 	c.JSON(http.StatusOK, gin.H{"success": true})
+		// }
+
+		// session.DeactivatedAt = null.TimeFrom(time.Now())
+
+		// err = db.Save(ctx, session)
 
 		session := sessions.Default(c)
 		session.Delete(userSessionkey)
 		if err := session.Save(); err != nil {
 			logger.Infof("Failed to delete session:", err)
-			c.Redirect(http.StatusMovedPermanently, "/login")
+			c.Redirect(http.StatusMovedPermanently, "/")
 		}
 
-		c.Redirect(http.StatusMovedPermanently, "/dashboard")
+		c.Redirect(http.StatusMovedPermanently, "/")
 	}
 }
 
 func (s *Server) HandleRegisterShow() func(c *gin.Context) {
 	return func(c *gin.Context) {
-		m := TemplateMap{}
+		m := getTemplateMap(c)
 		m.AddTitle("GoQuizbox - Register")
 		c.HTML(http.StatusOK, "register", m)
 	}
@@ -223,18 +250,7 @@ func (s *Server) validateUserRegistration(ctx context.Context, newUser *model.Us
 		return errors
 	}
 	db := database.NewUserDB(s.env.Database())
-
-	theUser, err := db.GetByUsername(ctx, newUser.Username)
-	if err != nil {
-		logger.Errorf("get user by username failed: %v", err)
-		return []string{"encountered error searching user by username"}
-	}
-
-	if theUser != nil {
-		return []string{"that username is already registered"}
-	}
-
-	theUser, err = db.GetByEmail(ctx, newUser.Email)
+	theUser, err := db.ByEmail(ctx, newUser.Email)
 	if err != nil {
 		logger.Errorf("get user by email failed: %v", err)
 		return []string{"encountered error searching user by email"}
@@ -255,7 +271,7 @@ func (s *Server) validateUserRegistration(ctx context.Context, newUser *model.Us
 func (s *Server) HandleRegisterProcess() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		m := TemplateMap{}
+		m := getTemplateMap(c)
 
 		var form registerFormData
 		err := c.Bind(&form)
