@@ -3,6 +3,7 @@ BEGIN;
 drop table if exists likes;
 
 drop type if exists like_type;
+drop type if exists like_mode;
 
 drop table if exists answers;
 

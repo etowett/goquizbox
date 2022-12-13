@@ -1,4 +1,4 @@
-DB_URL='postgres://goquizbox:goquizbox@127.0.0.1:5432/goquizbox?sslmode=disable'
+DB_URL='postgres://eutychus:eutychus@127.0.0.1:5432/goquizbox?sslmode=disable'
 MIGRATION_DIR="migrations"
 
 

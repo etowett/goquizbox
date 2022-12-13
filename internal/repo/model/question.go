@@ -1,4 +1,3 @@
-// Package model is a model abstraction of authorized apps.
 package model
 
 type Question struct {
@@ -21,7 +20,7 @@ func (c *Question) Validate() []string {
 	}
 
 	if c.Body == "" {
-		errors = append(errors, "Title cannot be empty")
+		errors = append(errors, "Body cannot be empty")
 	}
 
 	return errors

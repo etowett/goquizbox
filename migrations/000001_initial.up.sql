@@ -53,12 +53,14 @@ create table answers (
 );
 
 create type like_type as enum ('question', 'answer');
+create type like_mode as enum ('up', 'down');
 
 create table likes (
   id bigserial primary key,
   user_id bigint references users(id),
   type_id bigint references questions(id),
-  type varchar(20) not null,
+  type like_type not null,
+  mode like_mode not null,
   created_at timestamptz  not null default clock_timestamp(),
   updated_at timestamptz
 );

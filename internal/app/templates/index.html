@@ -4,26 +4,24 @@
 
     {{$questions := .data.questions}}
 
-    <div class="question">
-        <div class="row">
-            {{if $questions}}
-                <h2>All Questions</h2>
-                <hr />
-                {{range $questions}}
-                    <div class="question">
-                        <h3><a href="#">{{.Title}}</a></h3>
-                        <small>
-                            By {{.UserID}} asked {{.CreatedAt}} <a href="#">Like</a> 0 Views
-                        </small>
-                        <hr />
-                    </div>
-                {{end}}
-            {{else}}
-                <p>No Questions found. <br /> Perhaps you would like to add or select a different tab</p>
+    <div class="row">
+        {{if $questions}}
+            <h2>All Questions</h2>
+            <hr />
+            {{range $questions}}
+                <div class="question">
+                    <h3><a href="#">{{.Title}}</a></h3>
+                    <small>
+                        By {{.UserID}} asked {{.CreatedAt}} <a href="#">Like</a> 0 Views
+                    </small>
+                    <hr />
+                </div>
             {{end}}
-
             {{template "pagination" .}}
-        </div>
+        {{else}}
+            <p>No Questions found. <br /> Perhaps you would like to add or select a different tab</p>
+        {{end}}
+
     </div>
 
 {{template "bottom" .}}

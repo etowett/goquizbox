@@ -116,7 +116,7 @@ func (u *QuestionDB) Save(ctx context.Context, m *model.Question) error {
 	})
 }
 
-func (u *QuestionDB) GetByID(ctx context.Context, id int64) (*model.Question, error) {
+func (u *QuestionDB) ByID(ctx context.Context, id int64) (*model.Question, error) {
 	var question *model.Question
 
 	if err := u.db.InTx(ctx, pgx.ReadCommitted, func(tx pgx.Tx) error {

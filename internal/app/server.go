@@ -75,15 +75,18 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 	mux.GET("/healthz", s.HandleHealthz())
 	mux.HEAD("/healthz", s.HandleHealthz())
 
-	// Login pages
 	publicRoutes.GET("/login", s.HandleLoginShow())
 	publicRoutes.POST("/login", s.HandleLoginProcess())
 	privateRoutes.GET("/logout", s.HandleLogout())
-	publicRoutes.GET("/user-profile", s.HandleShowUserProfile())
-
-	// Register pages
 	publicRoutes.GET("/register", s.HandleRegisterShow())
 	publicRoutes.POST("/register", s.HandleRegisterProcess())
+	publicRoutes.GET("/user-profile", s.HandleShowUserProfile())
+
+	privateRoutes.GET("/questions/ask", s.HandleAskQuestionShow())
+	privateRoutes.POST("/questions/ask", s.HandleAskQuestionProcess())
+	privateRoutes.GET("/questions/:id", s.HandleGetQuestion())
+
+	privateRoutes.POST("/answers", s.HandleAnswerQuestion())
 
 	apiRoutes := mux.Group("/api/v1")
 	{

@@ -267,14 +267,13 @@ func (s *Server) validateUserRegistration(ctx context.Context, newUser *model.Us
 	return []string{}
 }
 
-// HandleRegisterProcess handles the process of user registration
 func (s *Server) HandleRegisterProcess() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		m := getTemplateMap(c)
 
 		var form registerFormData
-		err := c.Bind(&form)
+		err := c.ShouldBind(&form)
 		if err != nil {
 			ErrorPage(c, err.Error())
 			return

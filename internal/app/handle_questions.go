@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"goquizbox/internal/entities"
 	"goquizbox/internal/repo/database"
@@ -15,14 +14,22 @@ import (
 	"goquizbox/internal/web/webutils"
 	"goquizbox/pkg/logging"
 
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
 
 type (
 	questionFormData struct {
-		Title string `json:"title" form:"username" binding:"required"`
-		Body  string `json:"body" form:"first_name" binding:"required"`
-		Tags  string `json:"tags" form:"last_name" binding:"required"`
+		UserID string `json:"user_id" form:"user_id" binding:"required"`
+		Title  string `json:"title" form:"title" binding:"required"`
+		Body   string `json:"body" form:"body" binding:"required"`
+		Tags   string `json:"tags" form:"tags" binding:"required"`
+	}
+
+	answerFormData struct {
+		UserID     int64  `json:"user_id" form:"user_id" binding:"required"`
+		QuestionID int64  `json:"question_id" form:"question_id" binding:"required"`
+		Body       string `json:"body" form:"body" binding:"required"`
 	}
 )
 
@@ -30,17 +37,63 @@ func (f *questionFormData) populateQuestion(m *model.Question) {
 	m.Title = f.Title
 	m.Body = f.Body
 	m.Tags = f.Tags
-	m.CreatedAt = time.Now()
 }
 
-func (s *Server) validateCreateQuestion(ctx context.Context, newQuestion *model.Question) []string {
+func (f *answerFormData) populateAnswer(m *model.Answer) {
+	m.UserID = f.UserID
+	m.QuestionID = f.QuestionID
+	m.Body = f.Body
+}
+
+func (s *Server) HandleAskQuestionShow() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		m := getTemplateMap(c)
+		m.AddTitle("GoQuizbox - Ask Question")
+		c.HTML(http.StatusOK, "question_ask", m)
+	}
+}
+
+func (s *Server) HandleAskQuestionProcess() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		m := getTemplateMap(c)
+
+		var form questionFormData
+		err := c.ShouldBind(&form)
+		if err != nil {
+			ErrorPage(c, err.Error())
+			return
+		}
+
+		newQuiz := model.NewQuestion()
+		form.populateQuestion(newQuiz)
+
+		session := sessions.Default(c)
+		user := session.Get(userSessionkey).(*model.User)
+
+		newQuiz.UserID = user.ID
+
+		errors := s.validateCreateQuestion(ctx, newQuiz)
+		if len(errors) > 0 {
+			m.AddErrors(errors...)
+			c.HTML(http.StatusOK, "question_ask", m)
+			return
+		}
+
+		c.Redirect(http.StatusMovedPermanently, fmt.Sprintf("/questions/%v", newQuiz.ID))
+	}
+}
+
+func (s *Server) validateCreateQuestion(
+	ctx context.Context,
+	newQuestion *model.Question,
+) []string {
 	logger := logging.FromContext(ctx).Named("validateCreateQuestion")
 	errors := newQuestion.Validate()
 	if len(errors) > 0 {
 		return errors
 	}
 	db := database.NewQuestionDB(s.env.Database())
-
 	if err := db.Save(ctx, newQuestion); err != nil {
 		logger.Errorf("failed to insert question: %v", err)
 		return []string{"encountered an error creating the question"}
@@ -80,6 +133,44 @@ func (s *Server) HandleApiAddQuestion() func(c *gin.Context) {
 			"success": true,
 			"data":    newQuestion,
 		})
+	}
+}
+
+func (s *Server) HandleAnswerQuestion() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		logger := logging.FromContext(ctx).Named("handleAnswerQuestion")
+		m := getTemplateMap(c)
+
+		var form answerFormData
+		err := c.ShouldBind(&form)
+		if err != nil {
+			m.AddErrors(err.Error())
+			c.HTML(http.StatusOK, "question", m)
+			return
+		}
+
+		newAnswer := model.NewAnswer()
+		form.populateAnswer(newAnswer)
+
+		session := sessions.Default(c)
+		user := session.Get(userSessionkey).(*model.User)
+
+		if newAnswer.UserID != user.ID {
+			m.AddErrors("You do not have permission to ask")
+			c.HTML(http.StatusOK, "question", m)
+			return
+		}
+
+		db := database.NewAnswerDB(s.env.Database())
+		if err := db.Save(ctx, newAnswer); err != nil {
+			logger.Errorf("failed to save answer: %v", err)
+			m.AddErrors("encountered an error creating the answer")
+			c.HTML(http.StatusOK, "question", m)
+			return
+		}
+
+		c.Redirect(http.StatusMovedPermanently, fmt.Sprintf("/questions/%v", newAnswer.QuestionID))
 	}
 }
 
@@ -154,7 +245,7 @@ func (s *Server) HandleApiGetQuestion() func(c *gin.Context) {
 		}
 
 		db := database.NewQuestionDB(s.env.Database())
-		question, err := db.GetByID(ctx, questionID)
+		question, err := db.ByID(ctx, questionID)
 		if err != nil {
 			logger.Errorf("failed to get question by id %v: %v", questionID, err)
 			c.JSON(http.StatusInternalServerError, map[string]interface{}{
@@ -168,5 +259,59 @@ func (s *Server) HandleApiGetQuestion() func(c *gin.Context) {
 			"success": true,
 			"data":    question,
 		})
+	}
+}
+
+func (s *Server) HandleGetQuestion() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		m := getTemplateMap(c)
+		ctx := c.Request.Context()
+		logger := logging.FromContext(ctx).Named("handlegetQuestion")
+
+		questionIDStr := c.Param("id")
+		questionID, err := strconv.ParseInt(questionIDStr, 10, 64)
+		if err != nil {
+			ErrorPage(c, fmt.Sprintf("failed to parse 'id' param=[%v] for get question", questionIDStr))
+			return
+		}
+
+		filter, err := webutils.FilterFromContext(c)
+		if err != nil {
+			logger.Errorf("Failed to parse pagination filter for selecting answer list: %v", err)
+			ErrorPage(c, "Failed to parse pagination")
+			return
+		}
+
+		db := database.NewQuestionDB(s.env.Database())
+		question, err := db.ByID(ctx, questionID)
+		if err != nil {
+			logger.Errorf("failed to get question: %v", err)
+			ErrorPage(c, "could not get question")
+			return
+		}
+
+		answerDB := database.NewAnswerDB(s.env.Database())
+		answers, err := answerDB.ByQuestion(ctx, questionID, filter)
+		if err != nil {
+			logger.Errorf("failed to get answers for question: %v", err)
+			ErrorPage(c, "failed to get answer list")
+			return
+		}
+
+		count, err := answerDB.CountByQuestion(ctx, questionID, filter)
+		if err != nil {
+			logger.Errorf("failed to count answers: %v", err)
+			ErrorPage(c, "could not count answers")
+			return
+		}
+
+		logger.Infow("answers", answers)
+		m["data"] = map[string]interface{}{
+			"question":   question,
+			"answers":    answers,
+			"pagination": entities.NewPagination(*count, filter.Page, filter.Per),
+		}
+		m.AddTitle("GoQuizbox - Question Details")
+		c.HTML(http.StatusOK, "question", m)
 	}
 }
