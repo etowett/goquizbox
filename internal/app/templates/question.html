@@ -5,6 +5,8 @@
 {{$question := .data.question}}
 {{$currentUser := .user}}
 {{$answers := .data.answers}}
+{{$upvotes := .data.upvotes}}
+{{$downvotes := .data.downvotes}}
 
 
 <div class="question">
@@ -15,7 +17,7 @@
         <div>
           {{.Body}}
         </div>
-        <p><small><a href="#">Upvote</a> | <a href="#">Downvote</a></small></p>
+        <p><small><a href="/questions/{{$question.ID}}/vote?act=up&kind=question">Upvote ({{$upvotes}})</a> | <a href="/questions/{{$question.ID}}/vote?act=down&kind=question">Downvote ({{$downvotes}})</a></small></p>
     {{end}}
 
     {{template "pagination" .}}

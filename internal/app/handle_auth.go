@@ -35,7 +35,7 @@ type (
 	loginFormData struct {
 		Email    string `form:"email" json:"email" binding:"required"`
 		Password string `form:"password" json:"password" binding:"required"`
-		Remember bool   `form:"remember"`
+		Remember string `form:"remember"`
 	}
 )
 
@@ -53,7 +53,7 @@ func (f *registerFormData) PopulateUser(a *model.User) {
 func (f *loginFormData) PopulateLogin(a *model.Login) {
 	a.Email = strings.TrimSpace(f.Email)
 	a.Password = strings.TrimSpace(f.Password)
-	a.Remember = f.Remember
+	a.Remember = f.Remember == "on"
 }
 
 func (s *Server) validateUserLogin(

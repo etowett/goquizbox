@@ -12,7 +12,9 @@
                 <div class="question">
                     <h3><a href="#">{{.Title}}</a></h3>
                     <small>
-                        By {{.UserID}} asked {{.CreatedAt}} <a href="#">Like</a> 0 Views
+                        By {{.UserID}} asked {{.CreatedAt}}
+                        <a href="/questions/{{.ID}}/vote?act=up&kind=question">Upvote</a> |
+                        <a href="/questions/{{.ID}}/vote?act=down&kind=question">Downvote</a> |
                     </small>
                     <hr />
                 </div>

@@ -26,8 +26,5 @@ services:
     networks:
       - goquizbox_net
 
-volumes:
-  goquizbox_app:
-
 networks:
   goquizbox_net:

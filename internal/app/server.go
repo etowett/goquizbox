@@ -85,6 +85,7 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 	privateRoutes.GET("/questions/ask", s.HandleAskQuestionShow())
 	privateRoutes.POST("/questions/ask", s.HandleAskQuestionProcess())
 	privateRoutes.GET("/questions/:id", s.HandleGetQuestion())
+	privateRoutes.GET("/questions/:id/vote", s.HandleQuestionVote())
 
 	privateRoutes.POST("/answers", s.HandleAnswerQuestion())
 

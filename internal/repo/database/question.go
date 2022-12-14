@@ -33,11 +33,11 @@ func NewQuestionDB(db *database.DB) *QuestionDB {
 	}
 }
 
-func (a *QuestionDB) List(ctx context.Context, filter *webutils.Filter) ([]*model.Question, error) {
+func (q *QuestionDB) List(ctx context.Context, filter *webutils.Filter) ([]*model.Question, error) {
 	var questions []*model.Question
 
-	if err := a.db.InTx(ctx, pgx.ReadCommitted, func(tx pgx.Tx) error {
-		query, args := a.buildQuery(
+	if err := q.db.InTx(ctx, pgx.ReadCommitted, func(tx pgx.Tx) error {
+		query, args := q.buildQuery(
 			getQuestionsSQL,
 			filter,
 		)
@@ -53,7 +53,7 @@ func (a *QuestionDB) List(ctx context.Context, filter *webutils.Filter) ([]*mode
 				return fmt.Errorf("failed to iterate: %w", err)
 			}
 
-			question, err := scanOneQuestion(rows)
+			question, err := q.scanOne(rows)
 			if err != nil {
 				return fmt.Errorf("failed to parse: %w", err)
 			}
@@ -68,10 +68,10 @@ func (a *QuestionDB) List(ctx context.Context, filter *webutils.Filter) ([]*mode
 	return questions, nil
 }
 
-func (a *QuestionDB) Count(ctx context.Context, filter *webutils.Filter) (*int, error) {
+func (q *QuestionDB) Count(ctx context.Context, filter *webutils.Filter) (*int, error) {
 	var count int
-	if err := a.db.InTx(ctx, pgx.ReadCommitted, func(tx pgx.Tx) error {
-		query, args := a.buildQuery(
+	if err := q.db.InTx(ctx, pgx.ReadCommitted, func(tx pgx.Tx) error {
+		query, args := q.buildQuery(
 			countCuestionsSQL,
 			&webutils.Filter{
 				Term: filter.Term,
@@ -95,7 +95,6 @@ func (u *QuestionDB) Save(ctx context.Context, m *model.Question) error {
 	}
 
 	m.Touch()
-
 	return u.db.InTx(ctx, pgx.ReadCommitted, func(tx pgx.Tx) error {
 		if m.IsNew() {
 			err := tx.QueryRow(
@@ -116,14 +115,14 @@ func (u *QuestionDB) Save(ctx context.Context, m *model.Question) error {
 	})
 }
 
-func (u *QuestionDB) ByID(ctx context.Context, id int64) (*model.Question, error) {
+func (q *QuestionDB) ByID(ctx context.Context, id int64) (*model.Question, error) {
 	var question *model.Question
 
-	if err := u.db.InTx(ctx, pgx.ReadCommitted, func(tx pgx.Tx) error {
+	if err := q.db.InTx(ctx, pgx.ReadCommitted, func(tx pgx.Tx) error {
 		row := tx.QueryRow(ctx, getQuestionByIDSQL, id)
 
 		var err error
-		question, err = scanOneQuestion(row)
+		question, err = q.scanOne(row)
 		if err != nil {
 			return fmt.Errorf("failed to parse: %w", err)
 		}
@@ -135,8 +134,8 @@ func (u *QuestionDB) ByID(ctx context.Context, id int64) (*model.Question, error
 	return question, nil
 }
 
-func (u *QuestionDB) Delete(ctx context.Context, id int64) error {
-	if err := u.db.InTx(ctx, pgx.ReadCommitted, func(tx pgx.Tx) error {
+func (q *QuestionDB) Delete(ctx context.Context, id int64) error {
+	if err := q.db.InTx(ctx, pgx.ReadCommitted, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, deleteQuestionSQL, id)
 		return err
 	}); err != nil {
@@ -145,7 +144,7 @@ func (u *QuestionDB) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (u *QuestionDB) buildQuery(
+func (q *QuestionDB) buildQuery(
 	query string,
 	filter *webutils.Filter,
 ) (string, []interface{}) {
@@ -185,7 +184,7 @@ func (u *QuestionDB) buildQuery(
 	return query, args
 }
 
-func scanOneQuestion(row pgx.Row) (*model.Question, error) {
+func (q *QuestionDB) scanOne(row pgx.Row) (*model.Question, error) {
 	question := model.NewQuestion()
 
 	if err := row.Scan(

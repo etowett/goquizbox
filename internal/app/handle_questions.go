@@ -271,7 +271,7 @@ func (s *Server) HandleGetQuestion() func(c *gin.Context) {
 		questionIDStr := c.Param("id")
 		questionID, err := strconv.ParseInt(questionIDStr, 10, 64)
 		if err != nil {
-			ErrorPage(c, fmt.Sprintf("failed to parse 'id' param=[%v] for get question", questionIDStr))
+			ErrorPage(c, fmt.Sprintf("failed to parse 'id' param=[%v]", questionIDStr))
 			return
 		}
 
@@ -305,13 +305,82 @@ func (s *Server) HandleGetQuestion() func(c *gin.Context) {
 			return
 		}
 
+		votesDB := database.NewVoteDB(s.env.Database())
+		upVotes, err := votesDB.CountVotes(ctx, questionID, "question", "up")
+		if err != nil {
+			logger.Errorf("failed to count question upvotes: %v", err)
+			ErrorPage(c, "could not count question upvotes")
+			return
+		}
+
+		downVotes, err := votesDB.CountVotes(ctx, questionID, "question", "down")
+		if err != nil {
+			logger.Errorf("failed to count question downvotes: %v", err)
+			ErrorPage(c, "could not count question downvotes")
+			return
+		}
+
 		logger.Infow("answers", answers)
 		m["data"] = map[string]interface{}{
 			"question":   question,
+			"upvotes":    upVotes,
+			"downvotes":  downVotes,
 			"answers":    answers,
 			"pagination": entities.NewPagination(*count, filter.Page, filter.Per),
 		}
 		m.AddTitle("GoQuizbox - Question Details")
 		c.HTML(http.StatusOK, "question", m)
+	}
+}
+
+func (s *Server) HandleQuestionVote() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		logger := logging.FromContext(ctx).Named("handleQuestionVote")
+
+		questionIDStr := c.Param("id")
+		questionID, err := strconv.ParseInt(questionIDStr, 10, 64)
+		if err != nil {
+			ErrorPage(c, fmt.Sprintf("failed to parse 'id' param=[%v]", questionIDStr))
+			return
+		}
+
+		action := c.Query("act")
+		kind := c.Query("kind")
+
+		session := sessions.Default(c)
+		user := session.Get(userSessionkey).(*model.User)
+
+		db := database.NewVoteDB(s.env.Database())
+		vote, err := db.ByUserAndKind(ctx, user.ID, questionID, kind)
+		if err != nil {
+			logger.Errorf("failed to get vote: %v", err)
+			ErrorPage(c, "could not get vote")
+			return
+		}
+
+		if vote != nil {
+			if vote.Mode == action {
+				logger.Infof("already voted %v for it: %v", action, vote)
+				c.Redirect(http.StatusMovedPermanently, fmt.Sprintf("/questions/%v", questionID))
+			}
+			vote.Mode = action
+		} else {
+			vote = &model.Vote{
+				UserID: user.ID,
+				KindID: questionID,
+				Kind:   kind,
+				Mode:   action,
+			}
+		}
+
+		err = db.Save(ctx, vote)
+		if err != nil {
+			logger.Errorf("failed to save vote: %v", err)
+			ErrorPage(c, "could not save vote")
+			return
+		}
+
+		c.Redirect(http.StatusMovedPermanently, fmt.Sprintf("/questions/%v", questionID))
 	}
 }
