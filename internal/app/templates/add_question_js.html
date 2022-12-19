@@ -1,0 +1,94 @@
+{{define "add_question_js"}}
+
+{{template "top" .}}
+
+<style>
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+</style>
+
+<script>
+  function questionForm() {
+    return {
+      question: {
+        user_id: '',
+        title: '',
+        body: '',
+        tags: ''
+      },
+      message: '',
+      loading: false,
+      buttonLabel: 'Submit',
+
+      authToken: JSON.parse(localStorage.getItem('session_token')),
+      user: JSON.parse(localStorage.getItem('user')),
+
+      submitData() {
+        this.buttonLabel = 'Submitting...'
+	      this.loading = true;
+        this.message = ''
+
+        this.question.user_id = this.user.id;
+
+        console.log('question', this.question);
+        console.log('authToken', this.authToken);
+        console.log('user', this.user);
+
+        fetch('/api/v1/questions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Auth-Token': this.authToken,
+          },
+          body: JSON.stringify(this.question)
+        })
+        .then(response => response.json())
+        .then((response) => {
+          if (!response.success) {
+            this.message = response.message
+            return
+          }
+          this.message = 'Form sucessfully submitted!'
+          window.location.replace("/questions")
+        })
+        .catch(() => {
+          this.message = 'Ooops! Something went wrong!'
+        })
+        .finally(() => {
+          this.loading = false;
+          this.buttonLabel = 'Submit'
+        })
+      }
+    }
+  }
+</script>
+
+<h2>Add Question</h2>
+
+<div class="row">
+    <div class="col-md-8 col-offset-md-2">
+      <form method="post" action="/api/v1/questions" x-data="questionForm()" @submit.prevent="submitData">
+        <input type="hidden" name="user_id" x-model="question.user_id">
+        <div class="form-group">
+          <label for="title">Title</label>
+          <input type="text" class="form-control" name="title" id="title" x-model="question.title" placeholder="Title">
+        </div>
+        <div class="form-group">
+          <label for="body">Body</label>
+          <textarea class="form-control" name="body" id="body" cols="30" rows="10" x-model="question.body"  placeholder="Body"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="tags">Tags</label>
+          <input type="text" class="form-control" name="tags" id="tags" x-model="question.tags"  placeholder="Tags">
+        </div>
+        <button type="submit" class="btn btn-primary" x-text="buttonLabel" :disabled="loading"></button>
+        <p x-text="message"></p>
+      </form>
+    </div>
+</div>
+
+{{template "bottom" .}}
+
+{{end}}

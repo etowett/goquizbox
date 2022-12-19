@@ -40,8 +40,8 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 
 	gob.Register(model.NewUser())
 
-	mux := gin.Default()
-	// mux := gin.New()
+	// mux := gin.Default()
+	mux := gin.New()
 
 	// Recovery middleware recovers from any panics and writes a 500 if there was one.
 	mux.Use(gin.Recovery())
@@ -70,11 +70,13 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 
 	// Landing page
 	publicRoutes.GET("/", s.HandleIndex())
+	publicRoutes.GET("/questions", s.HandleListQuestions())
 
 	// Healthz page
 	mux.GET("/healthz", s.HandleHealthz())
 	mux.HEAD("/healthz", s.HandleHealthz())
 
+	publicRoutes.GET("/xlogin", s.HandleLoginShowJS())
 	publicRoutes.GET("/login", s.HandleLoginShow())
 	publicRoutes.POST("/login", s.HandleLoginProcess())
 	privateRoutes.GET("/logout", s.HandleLogout())
@@ -82,6 +84,7 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 	publicRoutes.POST("/register", s.HandleRegisterProcess())
 	publicRoutes.GET("/user-profile", s.HandleShowUserProfile())
 
+	publicRoutes.GET("/questions/new", s.HandleNewQuestionJS())
 	privateRoutes.GET("/questions/ask", s.HandleAskQuestionShow())
 	privateRoutes.POST("/questions/ask", s.HandleAskQuestionProcess())
 	privateRoutes.GET("/questions/:id", s.HandleGetQuestion())

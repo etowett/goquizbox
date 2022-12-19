@@ -20,7 +20,7 @@ import (
 
 type (
 	questionFormData struct {
-		UserID string `json:"user_id" form:"user_id" binding:"required"`
+		UserID int64  `json:"user_id" form:"user_id" binding:"required"`
 		Title  string `json:"title" form:"title" binding:"required"`
 		Body   string `json:"body" form:"body" binding:"required"`
 		Tags   string `json:"tags" form:"tags" binding:"required"`
@@ -43,6 +43,22 @@ func (f *answerFormData) populateAnswer(m *model.Answer) {
 	m.UserID = f.UserID
 	m.QuestionID = f.QuestionID
 	m.Body = f.Body
+}
+
+func (s *Server) HandleListQuestions() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		m := getTemplateMap(c)
+		m.AddTitle("GoQuizbox - Question List")
+		c.HTML(http.StatusOK, "questions", m)
+	}
+}
+
+func (s *Server) HandleNewQuestionJS() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		m := getTemplateMap(c)
+		m.AddTitle("GoQuizbox - Question List")
+		c.HTML(http.StatusOK, "add_question_js", m)
+	}
 }
 
 func (s *Server) HandleAskQuestionShow() func(c *gin.Context) {
@@ -104,10 +120,12 @@ func (s *Server) validateCreateQuestion(
 func (s *Server) HandleApiAddQuestion() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
+		logger := logging.FromContext(ctx).Named("handleApiAddQuestion")
 
 		var form questionFormData
 		err := c.ShouldBindJSON(&form)
 		if err != nil {
+			logger.Errorf("failed to bind form: %v", err)
 			c.JSON(http.StatusBadRequest, map[string]interface{}{
 				"success": false,
 				"message": "invalid form provided",

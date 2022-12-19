@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   app-air:
-    image: cosmtrek/air:v1.40.4
+    image: cosmtrek/air:latest
     working_dir: /goquizbox
     ports:
       - 8090:8090

@@ -35,7 +35,7 @@ type (
 	loginFormData struct {
 		Email    string `form:"email" json:"email" binding:"required"`
 		Password string `form:"password" json:"password" binding:"required"`
-		Remember string `form:"remember"`
+		Remember bool   `form:"remember"`
 	}
 )
 
@@ -53,7 +53,8 @@ func (f *registerFormData) PopulateUser(a *model.User) {
 func (f *loginFormData) PopulateLogin(a *model.Login) {
 	a.Email = strings.TrimSpace(f.Email)
 	a.Password = strings.TrimSpace(f.Password)
-	a.Remember = f.Remember == "on"
+	a.Remember = f.Remember
+	// a.Remember = f.Remember == "on"
 }
 
 func (s *Server) validateUserLogin(
@@ -117,6 +118,14 @@ func (s *Server) HandleLoginShow() func(c *gin.Context) {
 	}
 }
 
+func (s *Server) HandleLoginShowJS() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		m := getTemplateMap(c)
+		m.AddTitle("GoQuizbox - XLogin")
+		c.HTML(http.StatusOK, "xlogin", m)
+	}
+}
+
 func (s *Server) HandleLoginProcess() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -157,10 +166,11 @@ func (s *Server) HandleLoginProcess() func(c *gin.Context) {
 func (s *Server) HandleAPILogin(sessionAuthenticator auth.SessionAuthenticator) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-
+		logger := logging.FromContext(ctx).Named("handleAPILogin")
 		var form loginFormData
-		err := c.BindJSON(&form)
+		err := c.ShouldBindJSON(&form)
 		if err != nil {
+			logger.Errorf("bad login form: %v", err)
 			c.JSON(http.StatusBadRequest, map[string]interface{}{
 				"success": false,
 				"message": "invalid form provided",

@@ -1,0 +1,85 @@
+{{define "xlogin"}}
+
+{{template "top" .}}
+
+<style>
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+</style>
+
+<script>
+  function loginForm(){
+    return {
+      login: {
+        email: '',
+        password: '',
+        remember: ''
+      },
+
+      message: '',
+      loading: false,
+      buttonLabel: 'Login',
+
+      submitData() {
+        this.buttonLabel = 'Processing...'
+	      this.loading = true;
+        console.log("login", this.login);
+
+        fetch('/api/v1/users/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.login)
+          })
+        .then(response => response.json())
+        .then((response) => {
+          if (!response.success) {
+            this.message = response.message
+            return
+          }
+          // console.log("response", response);
+          localStorage.setItem('session_token', JSON.stringify(response.token))
+          localStorage.setItem('user', JSON.stringify(response.user))
+          this.message = 'Form sucessfully submitted!'
+          window.location.replace("/questions/new")
+        })
+        .catch(() => {
+          this.message = 'Ooops! Something went wrong!'
+        })
+        .finally(() => {
+          this.loading = false;
+          this.buttonLabel = 'Submit'
+        })
+      }
+    }
+  }
+</script>
+
+<h2>Login JS</h2>
+
+<div class="row">
+  <div class="col-md-6 col-offset-md-2">
+    <form method="post" action="/api/v1/users/login" x-data="loginForm()" @submit.prevent="submitData">
+      <p x-text="message"></p>
+      <div class="form-group">
+      <label for="email">Email address</label>
+      <input type="email" class="form-control" name="email" id="email" x-model="login.email" placeholder="Enter email">
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" class="form-control" name="password" id="password" x-model="login.password" placeholder="Password">
+      </div>
+      <div class="form-check">
+        <input type="checkbox" class="form-check-input" name="remember" id="remember" x-model="login.remember">
+        <label class="form-check-label" for="remember">Remember</label>
+      </div>
+      <button type="submit" class="btn btn-primary" x-text="buttonLabel" :disabled="loading">Login</button>
+    </form>
+    <p>Don't have an account? Register <a href="/register">here</a>.</p>
+  </div>
+</div>
+
+{{template "bottom" .}}
+
+{{end}}
