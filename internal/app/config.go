@@ -1,22 +1,8 @@
 package app
 
 import (
-	"embed"
-	"fmt"
-	"html/template"
-	"io/fs"
-
 	"goquizbox/internal/setup"
 	"goquizbox/pkg/database"
-)
-
-var (
-	//go:embed templates/*
-	templatesFS embed.FS
-
-	//go:embed assets/*
-	assetsFolderFS embed.FS
-	assetsFS, _    = fs.Sub(assetsFolderFS, "assets")
 )
 
 var (
@@ -31,15 +17,4 @@ type Config struct {
 
 func (c *Config) DatabaseConfig() *database.Config {
 	return &c.Database
-}
-
-func (c *Config) TemplateRenderer() (*template.Template, error) {
-	tmpl, err := template.New("").
-		Option("missingkey=zero").
-		Funcs(TemplateFuncMap).
-		ParseFS(templatesFS, "templates/*.html")
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse templates from fs: %w", err)
-	}
-	return tmpl, nil
 }

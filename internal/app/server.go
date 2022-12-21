@@ -2,12 +2,10 @@ package app
 
 import (
 	"context"
-	"encoding/gob"
 	"fmt"
 	"net/http"
 
 	"goquizbox/internal/middleware"
-	"goquizbox/internal/repo/model"
 	"goquizbox/internal/serverenv"
 	"goquizbox/internal/web/auth"
 
@@ -33,13 +31,6 @@ func NewServer(config *Config, env *serverenv.ServerEnv) (*Server, error) {
 }
 
 func (s *Server) Routes(ctx context.Context) http.Handler {
-	tmpl, err := s.config.TemplateRenderer()
-	if err != nil {
-		panic(fmt.Errorf("failed to load templates: %w", err))
-	}
-
-	gob.Register(model.NewUser())
-
 	// mux := gin.Default()
 	mux := gin.New()
 
@@ -56,41 +47,12 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 	defaultMiddlewares := middleware.DefaultMiddlewares(sessionAuthenticator)
 	mux.Use(defaultMiddlewares...)
 
-	mux.SetFuncMap(TemplateFuncMap)
-	mux.SetHTMLTemplate(tmpl)
-
-	// Static assets.
-	mux.StaticFS("/assets/", http.FS(assetsFS))
-
-	publicRoutes := mux.Group("/")
-	publicRoutes.Use(middleware.MustNotBeLoggedIn)
-
-	privateRoutes := mux.Group("/")
-	privateRoutes.Use(middleware.MustBeLoggedIn)
-
-	// Landing page
-	publicRoutes.GET("/", s.HandleIndex())
-	publicRoutes.GET("/questions", s.HandleListQuestions())
-
 	// Healthz page
 	mux.GET("/healthz", s.HandleHealthz())
 	mux.HEAD("/healthz", s.HandleHealthz())
 
-	publicRoutes.GET("/xlogin", s.HandleLoginShowJS())
-	publicRoutes.GET("/login", s.HandleLoginShow())
-	publicRoutes.POST("/login", s.HandleLoginProcess())
-	privateRoutes.GET("/logout", s.HandleLogout())
-	publicRoutes.GET("/register", s.HandleRegisterShow())
-	publicRoutes.POST("/register", s.HandleRegisterProcess())
-	publicRoutes.GET("/user-profile", s.HandleShowUserProfile())
-
-	publicRoutes.GET("/questions/new", s.HandleNewQuestionJS())
-	privateRoutes.GET("/questions/ask", s.HandleAskQuestionShow())
-	privateRoutes.POST("/questions/ask", s.HandleAskQuestionProcess())
-	privateRoutes.GET("/questions/:id", s.HandleGetQuestion())
-	privateRoutes.GET("/questions/:id/vote", s.HandleQuestionVote())
-
-	privateRoutes.POST("/answers", s.HandleAnswerQuestion())
+	// privateRoutes.GET("/questions/:id", s.HandleGetQuestion())
+	// privateRoutes.GET("/questions/:id/vote", s.HandleQuestionVote())
 
 	apiRoutes := mux.Group("/api/v1")
 	{
@@ -101,6 +63,7 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 
 		apiRoutes.GET("/questions", s.HandleApiListQuestions())
 		apiRoutes.GET("/questions/:id", s.HandleApiGetQuestion())
+		apiRoutes.GET("/questions/:id/answers", s.HandleApiGetQuestionAnswers())
 
 		securedApiRoutes := apiRoutes.Group("")
 		securedApiRoutes.Use(auth.AllowOnlyActiveUser(
@@ -113,11 +76,15 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 			securedApiRoutes.DELETE("/users/logout", s.HandleApiLogoutUser())
 
 			securedApiRoutes.POST("/questions", s.HandleApiAddQuestion())
+			securedApiRoutes.POST("/questions/:id/answers", s.HandleApiAddQuestionAnswer())
 		}
 	}
 
 	mux.NoRoute(func(c *gin.Context) {
-		c.String(http.StatusNotFound, "Not found")
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Not Found",
+		})
 	})
 	return mux
 }

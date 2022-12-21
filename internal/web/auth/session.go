@@ -102,7 +102,6 @@ func (a *AppSessionAuthenticator) SetUserSessionInResponse(
 func (a *AppSessionAuthenticator) TokenInfoFromRequest(
 	req *http.Request,
 ) (*entities.TokenInfo, error) {
-
 	tokenValue := req.Header.Get(tokenHeader)
 	if tokenValue != "" {
 		return a.jwtHandler.TokenInfo(tokenValue)

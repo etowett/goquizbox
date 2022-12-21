@@ -14,7 +14,6 @@ import (
 	"goquizbox/internal/web/ctxhelper"
 	"goquizbox/pkg/logging"
 
-	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	null "gopkg.in/guregu/null.v4"
 )
@@ -110,59 +109,6 @@ func (s *Server) validateUserLogin(
 	return []string{}, theUser, dbSession
 }
 
-func (s *Server) HandleLoginShow() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		m := getTemplateMap(c)
-		m.AddTitle("GoQuizbox - Login")
-		c.HTML(http.StatusOK, "login", m)
-	}
-}
-
-func (s *Server) HandleLoginShowJS() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		m := getTemplateMap(c)
-		m.AddTitle("GoQuizbox - XLogin")
-		c.HTML(http.StatusOK, "xlogin", m)
-	}
-}
-
-func (s *Server) HandleLoginProcess() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-		m := getTemplateMap(c)
-		logger := logging.FromContext(ctx).Named("handleLoginProcess")
-
-		var form loginFormData
-		err := c.ShouldBind(&form)
-		if err != nil {
-			logger.Errorf("invalid login form: %v", err)
-			ErrorPage(c, "invalid login form provided")
-			return
-		}
-
-		newlogin := model.NewLogin()
-		form.PopulateLogin(newlogin)
-
-		errors, theUser, _ := s.validateUserLogin(ctx, newlogin)
-		if len(errors) > 0 {
-			m.AddErrors(errors...)
-			c.HTML(http.StatusOK, "login", m)
-			return
-		}
-
-		session := sessions.Default(c)
-		session.Set(userSessionkey, theUser)
-		if err := session.Save(); err != nil {
-			logger.Errorf("session save error: %v", err)
-			m.AddErrors("failed to save session")
-			c.HTML(http.StatusInternalServerError, "login", m)
-			return
-		}
-
-		c.Redirect(http.StatusMovedPermanently, "/")
-	}
-}
-
 func (s *Server) HandleAPILogin(sessionAuthenticator auth.SessionAuthenticator) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -196,60 +142,6 @@ func (s *Server) HandleAPILogin(sessionAuthenticator auth.SessionAuthenticator) 
 			"user":    theUser,
 			"token":   tokenValue,
 		})
-	}
-}
-
-func (s *Server) HandleLogout() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handleLogout")
-
-		// TODO: Deactivate session in DB
-		// tokenInfo := ctxhelper.TokenInfo(ctx)
-
-		// db := database.NewSessionDB(s.env.Database())
-		// session, err := db.GetSessionByID(ctx, tokenInfo.SessionID)
-		// if err != nil {
-		// 	logger.Errorf("failed to get session by id %v, %v", tokenInfo.SessionID, err)
-		// 	c.JSON(http.StatusInternalServerError, map[string]interface{}{
-		// 		"success": false,
-		// 		"message": "an internal error occured fetching session",
-		// 	})
-		// 	return
-		// }
-
-		// if session.UserID != tokenInfo.UserID {
-		// 	c.JSON(http.StatusBadRequest, map[string]interface{}{
-		// 		"success": false,
-		// 		"message": fmt.Sprintf("cannot logout session=[%v] by user=[%v]", tokenInfo.SessionID, tokenInfo.UserID),
-		// 	})
-		// 	return
-		// }
-
-		// if session.DeactivatedAt.Valid {
-		// 	c.JSON(http.StatusOK, gin.H{"success": true})
-		// }
-
-		// session.DeactivatedAt = null.TimeFrom(time.Now())
-
-		// err = db.Save(ctx, session)
-
-		session := sessions.Default(c)
-		session.Delete(userSessionkey)
-		if err := session.Save(); err != nil {
-			logger.Infof("Failed to delete session:", err)
-			c.Redirect(http.StatusMovedPermanently, "/")
-		}
-
-		c.Redirect(http.StatusMovedPermanently, "/")
-	}
-}
-
-func (s *Server) HandleRegisterShow() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		m := getTemplateMap(c)
-		m.AddTitle("GoQuizbox - Register")
-		c.HTML(http.StatusOK, "register", m)
 	}
 }
 
@@ -306,10 +198,12 @@ func (s *Server) HandleRegisterProcess() func(c *gin.Context) {
 func (s *Server) HandleAPIRegister() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
+		logger := logging.FromContext(ctx).Named("handleAPIRegister")
 
 		var form registerFormData
 		err := c.ShouldBindJSON(&form)
 		if err != nil {
+			logger.Errorf("bad form: %v", err)
 			c.JSON(http.StatusBadRequest, map[string]interface{}{
 				"success": false,
 				"message": "invalid form provided",

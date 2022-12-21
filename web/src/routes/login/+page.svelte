@@ -1,12 +1,25 @@
-{{define "login"}}
+<script>
+	import { enhance } from '$app/forms';
+    import ListErrors from '$lib/ListErrors.svelte';
 
-{{template "top" .}}
+	/** @type {import('./$types').ActionData} */
+	export let form;
+</script>
 
-<h2>Login</h2>
+<svelte:head>
+	<title>Sign in • Quizbox</title>
+</svelte:head>
 
 <div class="row">
   <div class="col-md-6 col-offset-md-2">
-      <form method="post" action="/login">
+    <h1 class="text-xs-center">Login In</h1>
+    <p class="text-xs-center">
+        <a href="/register">Need an account?</a>
+    </p>
+
+    <ListErrors errors={form?.errors} />
+
+      <form use:enhance method="POST">
         <div class="form-group">
         <label for="email">Email address</label>
         <input type="email" class="form-control" name="email" id="email" placeholder="Enter email">
@@ -21,10 +34,5 @@
         </div>
         <button type="submit" class="btn btn-primary">Login</button>
       </form>
-      <p>Don't have an account? Register <a href="/register">here</a>.</p>
   </div>
 </div>
-
-{{template "bottom" .}}
-
-{{end}}

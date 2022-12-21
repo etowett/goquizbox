@@ -45,61 +45,6 @@ func (f *answerFormData) populateAnswer(m *model.Answer) {
 	m.Body = f.Body
 }
 
-func (s *Server) HandleListQuestions() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		m := getTemplateMap(c)
-		m.AddTitle("GoQuizbox - Question List")
-		c.HTML(http.StatusOK, "questions", m)
-	}
-}
-
-func (s *Server) HandleNewQuestionJS() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		m := getTemplateMap(c)
-		m.AddTitle("GoQuizbox - Question List")
-		c.HTML(http.StatusOK, "add_question_js", m)
-	}
-}
-
-func (s *Server) HandleAskQuestionShow() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		m := getTemplateMap(c)
-		m.AddTitle("GoQuizbox - Ask Question")
-		c.HTML(http.StatusOK, "question_ask", m)
-	}
-}
-
-func (s *Server) HandleAskQuestionProcess() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-		m := getTemplateMap(c)
-
-		var form questionFormData
-		err := c.ShouldBind(&form)
-		if err != nil {
-			ErrorPage(c, err.Error())
-			return
-		}
-
-		newQuiz := model.NewQuestion()
-		form.populateQuestion(newQuiz)
-
-		session := sessions.Default(c)
-		user := session.Get(userSessionkey).(*model.User)
-
-		newQuiz.UserID = user.ID
-
-		errors := s.validateCreateQuestion(ctx, newQuiz)
-		if len(errors) > 0 {
-			m.AddErrors(errors...)
-			c.HTML(http.StatusOK, "question_ask", m)
-			return
-		}
-
-		c.Redirect(http.StatusMovedPermanently, fmt.Sprintf("/questions/%v", newQuiz.ID))
-	}
-}
-
 func (s *Server) validateCreateQuestion(
 	ctx context.Context,
 	newQuestion *model.Question,
@@ -154,41 +99,49 @@ func (s *Server) HandleApiAddQuestion() func(c *gin.Context) {
 	}
 }
 
-func (s *Server) HandleAnswerQuestion() func(c *gin.Context) {
+func (s *Server) HandleApiAddQuestionAnswer() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handleAnswerQuestion")
-		m := getTemplateMap(c)
+		logger := logging.FromContext(ctx).Named("handleApiAddQuestionAnswer")
 
 		var form answerFormData
 		err := c.ShouldBind(&form)
 		if err != nil {
-			m.AddErrors(err.Error())
-			c.HTML(http.StatusOK, "question", m)
+			logger.Errorf("failed to bind form: %v", err)
+			c.JSON(http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": "invalid form provided",
+			})
 			return
 		}
 
 		newAnswer := model.NewAnswer()
 		form.populateAnswer(newAnswer)
 
-		session := sessions.Default(c)
-		user := session.Get(userSessionkey).(*model.User)
+		userID := ctxhelper.UserID(ctx)
 
-		if newAnswer.UserID != user.ID {
-			m.AddErrors("You do not have permission to ask")
-			c.HTML(http.StatusOK, "question", m)
+		if newAnswer.UserID != userID {
+			c.JSON(http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": "You do not have permission to ask",
+			})
 			return
 		}
 
 		db := database.NewAnswerDB(s.env.Database())
 		if err := db.Save(ctx, newAnswer); err != nil {
 			logger.Errorf("failed to save answer: %v", err)
-			m.AddErrors("encountered an error creating the answer")
-			c.HTML(http.StatusOK, "question", m)
+			c.JSON(http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": "encountered an error creating the answer",
+			})
 			return
 		}
 
-		c.Redirect(http.StatusMovedPermanently, fmt.Sprintf("/questions/%v", newAnswer.QuestionID))
+		c.JSON(http.StatusCreated, gin.H{
+			"success": true,
+			"data":    newAnswer,
+		})
 	}
 }
 
@@ -257,7 +210,7 @@ func (s *Server) HandleApiGetQuestion() func(c *gin.Context) {
 		if err != nil {
 			c.JSON(http.StatusBadRequest, map[string]interface{}{
 				"success": false,
-				"message": fmt.Sprintf("failed to parse 'id' param=[%v] for get question", questionIDStr),
+				"message": fmt.Sprintf("failed to parse 'id' param=[%v]", questionIDStr),
 			})
 			return
 		}
@@ -276,6 +229,60 @@ func (s *Server) HandleApiGetQuestion() func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"data":    question,
+		})
+	}
+}
+
+func (s *Server) HandleApiGetQuestionAnswers() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		logger := logging.FromContext(ctx).Named("handleApiGetQuestionAnswers")
+
+		questionIDStr := c.Param("id")
+		questionID, err := strconv.ParseInt(questionIDStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": fmt.Sprintf("failed to parse 'id' param=[%v]", questionIDStr),
+			})
+			return
+		}
+
+		filter, err := webutils.FilterFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "Failed to parse pagination",
+			})
+			return
+		}
+
+		answerDB := database.NewAnswerDB(s.env.Database())
+		answers, err := answerDB.ByQuestion(ctx, questionID, filter)
+		if err != nil {
+			logger.Errorf("failed to get answers for question: %v", err)
+			c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "could not get answers",
+			})
+			return
+		}
+
+		count, err := answerDB.CountByQuestion(ctx, questionID, filter)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "could not count answers",
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data": map[string]interface{}{
+				"answers":    answers,
+				"pagination": entities.NewPagination(*count, filter.Page, filter.Per),
+			},
 		})
 	}
 }
