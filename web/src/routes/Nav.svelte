@@ -1,4 +1,5 @@
 <script>
+	import { enhance } from '$app/forms';
 	import { page } from '$app/stores';
 </script>
 
@@ -14,7 +15,9 @@
     {#if $page.data.user}
       <a class="me-3 py-2 text-dark text-decoration-none" href="/questions/new">Add Question</a>
       <a class="me-3 py-2 text-dark text-decoration-none" href="/profile/{$page.data.user.id}">Profile</a>
-      <a class="me-3 py-2 text-dark text-decoration-none" href="/logout">Logout</a>
+      <form use:enhance method="POST" action="?/logout">
+        <button class="btn btn-outline-danger">Logout</button>
+      </form>
     {:else}
       <a class="me-3 py-2 text-dark text-decoration-none" href="/login">Login</a>
       <a class="me-3 py-2 text-dark text-decoration-none" href="/register">Signup</a>

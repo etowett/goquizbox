@@ -20,7 +20,6 @@ export const actions = {
 			password_confirmation: data.get('password_confirmation')
 		});
 
-        console.log(response);
 		if (!response.success) {
 			return fail(401, response);
 		}

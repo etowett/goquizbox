@@ -1,8 +1,14 @@
 <script>
+	import { navigating } from '$app/stores';
+	import PreloadingIndicator from './PreloadingIndicator.svelte';
 	import Nav from './Nav.svelte';
 </script>
 
 <div class="container py-3">
+  {#if $navigating}
+    <PreloadingIndicator />
+  {/if}
+
   <Nav />
 
   <main class="main-content">

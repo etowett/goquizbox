@@ -20,7 +20,6 @@ export const actions = {
 			tags: data.get('tags'),
 		}, locals.user.token);
 
-    console.log(response);
 		if (!response.success) {
 			return fail(401, response);
 		}

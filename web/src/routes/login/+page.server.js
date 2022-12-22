@@ -20,8 +20,6 @@ export const actions = {
       remember: data.get('remember') === 'on',
 		});
 
-		console.log('login response', response);
-
 		if (!response.success) {
 			return fail(401, response);
 		}

@@ -1,4 +1,6 @@
 <script>
+	import Pagination from './Pagination.svelte';
+
   /** @type {import('./$types').PageData} */
 	export let data;
 </script>
@@ -10,7 +12,7 @@
 <h1>Question feed</h1>
 
 <div>
-{#if data.questions.length === 0}
+{#if data.questions === null}
 	<div>No questions are here ... yet.</div>
 {:else}
 	<div>
@@ -25,6 +27,7 @@
         <hr />
       </div>
 		{/each}
+    <Pagination pagination={data.pagination} />
 	</div>
 {/if}
 </div>
