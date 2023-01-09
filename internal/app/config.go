@@ -1,8 +1,8 @@
 package app
 
 import (
+	"goquizbox/internal/database"
 	"goquizbox/internal/setup"
-	"goquizbox/pkg/database"
 )
 
 var (

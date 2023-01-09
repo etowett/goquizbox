@@ -8,6 +8,9 @@ var (
 
 	// BuildTag is the git tag from which this build was created.
 	BuildTag string = "unknown"
+
+	// BuildTime is the time when the build was created.
+	BuildTime string = "unknown"
 )
 
 // info provides the build information about the key server.
@@ -21,4 +24,9 @@ func (buildinfo) ID() string {
 // Tag returns the build tag.
 func (buildinfo) Tag() string {
 	return BuildTag
+}
+
+// Tag returns the build tag.
+func (buildinfo) Time() string {
+	return BuildTime
 }

@@ -7,12 +7,11 @@ import (
 	"time"
 
 	"goquizbox/internal/entities"
-	"goquizbox/internal/repo/database"
+	"goquizbox/internal/logger"
+	"goquizbox/internal/repos"
 	"goquizbox/internal/web/ctxhelper"
 	"goquizbox/internal/web/webutils"
-	"goquizbox/pkg/logging"
 
-	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	null "gopkg.in/guregu/null.v4"
 )
@@ -25,24 +24,13 @@ type (
 	}
 )
 
-func (s *Server) HandleShowUserProfile() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		m := getTemplateMap(c)
-		m.AddTitle("goquizbox - UserProfile")
-		m["user"] = sessions.Default(c).Get(userSessionkey)
-		c.HTML(http.StatusOK, "user_profile", m)
-	}
-}
-
-func (s *Server) HandleApiListUsers() func(c *gin.Context) {
+func (s *Server) HandleListUsers() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handleApiListUsers")
 
 		filter, err := webutils.FilterFromContext(c)
 		if err != nil {
 			logger.Errorf("Failed to parse pagination filter for selecting users: %v", err)
-
 			c.JSON(http.StatusBadRequest, map[string]interface{}{
 				"success": false,
 				"message": "Failed to parse pagination",
@@ -50,10 +38,7 @@ func (s *Server) HandleApiListUsers() func(c *gin.Context) {
 			return
 		}
 
-		userID := ctxhelper.UserID(ctx)
-		logger.Infof("to validate user: %v", userID)
-
-		db := database.NewUserDB(s.env.Database())
+		db := repos.NewUserDB(s.env.Database())
 		users, err := db.List(ctx, filter)
 		if err != nil {
 			logger.Errorf("failed to list users: %v", err)
@@ -86,13 +71,9 @@ func (s *Server) HandleApiListUsers() func(c *gin.Context) {
 	}
 }
 
-func (s *Server) HandleApiGetUser() func(c *gin.Context) {
+func (s *Server) HandleGetUser() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handleApiGetUser")
-
-		userID := ctxhelper.UserID(ctx)
-		logger.Infof("to validate user: %v", userID)
 
 		userIDStr := c.Param("id")
 		userID, err := strconv.ParseInt(userIDStr, 10, 64)
@@ -104,7 +85,7 @@ func (s *Server) HandleApiGetUser() func(c *gin.Context) {
 			return
 		}
 
-		db := database.NewUserDB(s.env.Database())
+		db := repos.NewUserDB(s.env.Database())
 		user, err := db.GetByID(ctx, userID)
 		if err != nil {
 			logger.Errorf("failed to get user by id %v: %v", userID, err)
@@ -125,7 +106,6 @@ func (s *Server) HandleApiGetUser() func(c *gin.Context) {
 func (s *Server) HandleApiUpdateUser() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handleApiUpdateUser")
 
 		loggedInUserID := ctxhelper.UserID(ctx)
 
@@ -157,7 +137,7 @@ func (s *Server) HandleApiUpdateUser() func(c *gin.Context) {
 			return
 		}
 
-		db := database.NewUserDB(s.env.Database())
+		db := repos.NewUserDB(s.env.Database())
 		user, err := db.GetByID(ctx, userID)
 		if err != nil {
 			logger.Errorf("failed to get user by id %v: %v", userID, err)
@@ -201,10 +181,6 @@ func (s *Server) HandleApiUpdateUser() func(c *gin.Context) {
 func (s *Server) HandleApiDeleteUser() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handleApiDeleteUser")
-
-		userID := ctxhelper.UserID(ctx)
-		logger.Infof("to validate user %v", userID)
 
 		userIDStr := c.Param("id")
 		userID, err := strconv.ParseInt(userIDStr, 10, 64)
@@ -216,7 +192,14 @@ func (s *Server) HandleApiDeleteUser() func(c *gin.Context) {
 			return
 		}
 
-		db := database.NewUserDB(s.env.Database())
+		if userID != ctxhelper.UserID(ctx) {
+			c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "could not delete another user",
+			})
+		}
+
+		db := repos.NewUserDB(s.env.Database())
 		user, err := db.GetByID(ctx, userID)
 		if err != nil {
 			logger.Errorf("failed to get user by id %v: %v", userID, err)

@@ -94,18 +94,35 @@ zapcheck:
 	@zapw ./...
 .PHONY: zapcheck
 
-# make migration name=initial
-migration: ## Create golang migrate migrations
+# make migration name=create_users
+migration: ## Create golang goose migrations
 	@echo "Creating migration $(name)!"
-	@migrate create -ext sql -dir $(MIGRATION_DIR) -seq $(name)
+	@goose -dir $(MIGRATION_DIR) create $(name) sql
 	@echo "Done!"
 
-migrate_up: ## Golang migrate up migrations
+migrate_up: ## Golang goose up migrations
 	@echo "Migrating up!"
-	@migrate -database $(DB_URL) -path $(MIGRATION_DIR) up
+	@goose -dir $(MIGRATION_DIR) postgres $(DB_URL) up
 	@echo "Done!"
 
-migrate_down: ## Golang migrate down migrations
+migrate_down: ## Golang goose down migrations
 	@echo "Migrating down!"
-	@migrate -database $(DB_URL) -path $(MIGRATION_DIR) down
+	@goose -dir $(MIGRATION_DIR) postgres $(DB_URL) down
 	@echo "Done!"
+
+migrate_status: ## Golang goose status migrations
+	@echo "Getting migration status!"
+	@goose -dir $(MIGRATION_DIR) postgres $(DB_URL) status
+	@echo "Done!"
+
+migrate_reset: ## Golang goose reset migrations
+	@echo "Resetting $(MIGRATION_DIR)!"
+	@goose -dir $(MIGRATION_DIR) postgres $(DB_URL) reset
+	@echo "Done!"
+
+migrate_version: ## Golang goose version  migrations
+	@echo "Getting migration version!"
+	@goose -dir $(MIGRATION_DIR) postgres $(DB_URL) version
+	@echo "Done!"
+
+migrate_redo: migrate_reset migrate_up ## Golang goose redo migrations - reset then up

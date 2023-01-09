@@ -8,13 +8,11 @@ import (
 	"strings"
 
 	"goquizbox/internal/entities"
-	"goquizbox/internal/repo/database"
-	"goquizbox/internal/repo/model"
+	"goquizbox/internal/logger"
+	"goquizbox/internal/repos"
 	"goquizbox/internal/web/ctxhelper"
 	"goquizbox/internal/web/webutils"
-	"goquizbox/pkg/logging"
 
-	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
 
@@ -33,13 +31,13 @@ type (
 	}
 )
 
-func (f *questionFormData) populateQuestion(m *model.Question) {
+func (f *questionFormData) populateQuestion(m *entities.Question) {
 	m.Title = f.Title
 	m.Body = f.Body
 	m.Tags = f.Tags
 }
 
-func (f *answerFormData) populateAnswer(m *model.Answer) {
+func (f *answerFormData) populateAnswer(m *entities.Answer) {
 	m.UserID = f.UserID
 	m.QuestionID = f.QuestionID
 	m.Body = f.Body
@@ -47,14 +45,13 @@ func (f *answerFormData) populateAnswer(m *model.Answer) {
 
 func (s *Server) validateCreateQuestion(
 	ctx context.Context,
-	newQuestion *model.Question,
+	newQuestion *entities.Question,
 ) []string {
-	logger := logging.FromContext(ctx).Named("validateCreateQuestion")
 	errors := newQuestion.Validate()
 	if len(errors) > 0 {
 		return errors
 	}
-	db := database.NewQuestionDB(s.env.Database())
+	db := repos.NewQuestionDB(s.env.Database())
 	if err := db.Save(ctx, newQuestion); err != nil {
 		logger.Errorf("failed to insert question: %v", err)
 		return []string{"encountered an error creating the question"}
@@ -65,7 +62,6 @@ func (s *Server) validateCreateQuestion(
 func (s *Server) HandleApiAddQuestion() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handleApiAddQuestion")
 
 		var form questionFormData
 		err := c.ShouldBindJSON(&form)
@@ -78,7 +74,7 @@ func (s *Server) HandleApiAddQuestion() func(c *gin.Context) {
 			return
 		}
 
-		newQuestion := model.NewQuestion()
+		newQuestion := entities.NewQuestion()
 		form.populateQuestion(newQuestion)
 
 		newQuestion.UserID = ctxhelper.UserID(ctx)
@@ -102,7 +98,6 @@ func (s *Server) HandleApiAddQuestion() func(c *gin.Context) {
 func (s *Server) HandleApiAddQuestionAnswer() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handleApiAddQuestionAnswer")
 
 		var form answerFormData
 		err := c.ShouldBind(&form)
@@ -115,7 +110,7 @@ func (s *Server) HandleApiAddQuestionAnswer() func(c *gin.Context) {
 			return
 		}
 
-		newAnswer := model.NewAnswer()
+		newAnswer := entities.NewAnswer()
 		form.populateAnswer(newAnswer)
 
 		userID := ctxhelper.UserID(ctx)
@@ -128,7 +123,7 @@ func (s *Server) HandleApiAddQuestionAnswer() func(c *gin.Context) {
 			return
 		}
 
-		db := database.NewAnswerDB(s.env.Database())
+		db := repos.NewAnswerDB(s.env.Database())
 		if err := db.Save(ctx, newAnswer); err != nil {
 			logger.Errorf("failed to save answer: %v", err)
 			c.JSON(http.StatusBadRequest, map[string]interface{}{
@@ -145,10 +140,9 @@ func (s *Server) HandleApiAddQuestionAnswer() func(c *gin.Context) {
 	}
 }
 
-func (s *Server) HandleApiListQuestions() func(c *gin.Context) {
+func (s *Server) HandleListQuestions() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handleApiListQuestions")
 
 		filter, err := webutils.FilterFromContext(c)
 		if err != nil {
@@ -161,10 +155,7 @@ func (s *Server) HandleApiListQuestions() func(c *gin.Context) {
 			return
 		}
 
-		userID := ctxhelper.UserID(ctx)
-		logger.Infof("to validate user: %v", userID)
-
-		db := database.NewQuestionDB(s.env.Database())
+		db := repos.NewQuestionDB(s.env.Database())
 		questions, err := db.List(ctx, filter)
 		if err != nil {
 			logger.Errorf("failed to list questions: %v", err)
@@ -200,10 +191,6 @@ func (s *Server) HandleApiListQuestions() func(c *gin.Context) {
 func (s *Server) HandleApiGetQuestion() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handleApiGetQuestion")
-
-		userID := ctxhelper.UserID(ctx)
-		logger.Infof("to validate user: %v", userID)
 
 		questionIDStr := c.Param("id")
 		questionID, err := strconv.ParseInt(questionIDStr, 10, 64)
@@ -215,7 +202,7 @@ func (s *Server) HandleApiGetQuestion() func(c *gin.Context) {
 			return
 		}
 
-		db := database.NewQuestionDB(s.env.Database())
+		db := repos.NewQuestionDB(s.env.Database())
 		question, err := db.ByID(ctx, questionID)
 		if err != nil {
 			logger.Errorf("failed to get question by id %v: %v", questionID, err)
@@ -236,7 +223,6 @@ func (s *Server) HandleApiGetQuestion() func(c *gin.Context) {
 func (s *Server) HandleApiGetQuestionAnswers() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handleApiGetQuestionAnswers")
 
 		questionIDStr := c.Param("id")
 		questionID, err := strconv.ParseInt(questionIDStr, 10, 64)
@@ -257,7 +243,7 @@ func (s *Server) HandleApiGetQuestionAnswers() func(c *gin.Context) {
 			return
 		}
 
-		answerDB := database.NewAnswerDB(s.env.Database())
+		answerDB := repos.NewAnswerDB(s.env.Database())
 		answers, err := answerDB.ByQuestion(ctx, questionID, filter)
 		if err != nil {
 			logger.Errorf("failed to get answers for question: %v", err)
@@ -284,128 +270,5 @@ func (s *Server) HandleApiGetQuestionAnswers() func(c *gin.Context) {
 				"pagination": entities.NewPagination(*count, filter.Page, filter.Per),
 			},
 		})
-	}
-}
-
-func (s *Server) HandleGetQuestion() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		m := getTemplateMap(c)
-		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handlegetQuestion")
-
-		questionIDStr := c.Param("id")
-		questionID, err := strconv.ParseInt(questionIDStr, 10, 64)
-		if err != nil {
-			ErrorPage(c, fmt.Sprintf("failed to parse 'id' param=[%v]", questionIDStr))
-			return
-		}
-
-		filter, err := webutils.FilterFromContext(c)
-		if err != nil {
-			logger.Errorf("Failed to parse pagination filter for selecting answer list: %v", err)
-			ErrorPage(c, "Failed to parse pagination")
-			return
-		}
-
-		db := database.NewQuestionDB(s.env.Database())
-		question, err := db.ByID(ctx, questionID)
-		if err != nil {
-			logger.Errorf("failed to get question: %v", err)
-			ErrorPage(c, "could not get question")
-			return
-		}
-
-		answerDB := database.NewAnswerDB(s.env.Database())
-		answers, err := answerDB.ByQuestion(ctx, questionID, filter)
-		if err != nil {
-			logger.Errorf("failed to get answers for question: %v", err)
-			ErrorPage(c, "failed to get answer list")
-			return
-		}
-
-		count, err := answerDB.CountByQuestion(ctx, questionID, filter)
-		if err != nil {
-			logger.Errorf("failed to count answers: %v", err)
-			ErrorPage(c, "could not count answers")
-			return
-		}
-
-		votesDB := database.NewVoteDB(s.env.Database())
-		upVotes, err := votesDB.CountVotes(ctx, questionID, "question", "up")
-		if err != nil {
-			logger.Errorf("failed to count question upvotes: %v", err)
-			ErrorPage(c, "could not count question upvotes")
-			return
-		}
-
-		downVotes, err := votesDB.CountVotes(ctx, questionID, "question", "down")
-		if err != nil {
-			logger.Errorf("failed to count question downvotes: %v", err)
-			ErrorPage(c, "could not count question downvotes")
-			return
-		}
-
-		logger.Infow("answers", answers)
-		m["data"] = map[string]interface{}{
-			"question":   question,
-			"upvotes":    upVotes,
-			"downvotes":  downVotes,
-			"answers":    answers,
-			"pagination": entities.NewPagination(*count, filter.Page, filter.Per),
-		}
-		m.AddTitle("GoQuizbox - Question Details")
-		c.HTML(http.StatusOK, "question", m)
-	}
-}
-
-func (s *Server) HandleQuestionVote() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handleQuestionVote")
-
-		questionIDStr := c.Param("id")
-		questionID, err := strconv.ParseInt(questionIDStr, 10, 64)
-		if err != nil {
-			ErrorPage(c, fmt.Sprintf("failed to parse 'id' param=[%v]", questionIDStr))
-			return
-		}
-
-		action := c.Query("act")
-		kind := c.Query("kind")
-
-		session := sessions.Default(c)
-		user := session.Get(userSessionkey).(*model.User)
-
-		db := database.NewVoteDB(s.env.Database())
-		vote, err := db.ByUserAndKind(ctx, user.ID, questionID, kind)
-		if err != nil {
-			logger.Errorf("failed to get vote: %v", err)
-			ErrorPage(c, "could not get vote")
-			return
-		}
-
-		if vote != nil {
-			if vote.Mode == action {
-				logger.Infof("already voted %v for it: %v", action, vote)
-				c.Redirect(http.StatusMovedPermanently, fmt.Sprintf("/questions/%v", questionID))
-			}
-			vote.Mode = action
-		} else {
-			vote = &model.Vote{
-				UserID: user.ID,
-				KindID: questionID,
-				Kind:   kind,
-				Mode:   action,
-			}
-		}
-
-		err = db.Save(ctx, vote)
-		if err != nil {
-			logger.Errorf("failed to save vote: %v", err)
-			ErrorPage(c, "could not save vote")
-			return
-		}
-
-		c.Redirect(http.StatusMovedPermanently, fmt.Sprintf("/questions/%v", questionID))
 	}
 }

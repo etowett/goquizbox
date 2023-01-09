@@ -1,20 +1,21 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	"goquizbox/internal/repo/database"
-	"goquizbox/internal/repo/model"
+	"goquizbox/internal/entities"
+	"goquizbox/internal/logger"
+	"goquizbox/internal/repos"
 	"goquizbox/internal/util"
 	"goquizbox/internal/web/auth"
 	"goquizbox/internal/web/ctxhelper"
-	"goquizbox/pkg/logging"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	null "gopkg.in/guregu/null.v4"
 )
 
@@ -24,11 +25,11 @@ const (
 
 type (
 	registerFormData struct {
-		FirstName            string `json:"first_name" form:"first_name" binding:"required"`
-		LastName             string `json:"last_name" form:"last_name" binding:"required"`
-		Email                string `json:"email" form:"email" binding:"required"`
-		Password             string `json:"password" form:"password" binding:"required"`
-		PasswordConfirmation string `json:"password_confirmation" form:"password_confirmation" binding:"required"`
+		FirstName       string `json:"first_name" form:"first_name" binding:"required"`
+		LastName        string `json:"last_name" form:"last_name" binding:"required"`
+		Email           string `json:"email" form:"email" binding:"required"`
+		Password        string `json:"password" form:"password" binding:"required"`
+		PasswordConfirm string `json:"password_confirm" form:"password_confirm" binding:"required"`
 	}
 
 	loginFormData struct {
@@ -38,85 +39,13 @@ type (
 	}
 )
 
-func (f *registerFormData) PopulateUser(a *model.User) {
-	a.FirstName = f.FirstName
-	a.LastName = f.LastName
-	a.Email = f.Email
-	a.Password = f.Password
-	a.Status = model.UserStatusActive
-	a.PasswordConfirmation = f.PasswordConfirmation
-	a.PasswordHash = util.GeneratePasswordHash(f.Password)
-	a.CreatedAt = time.Now()
-}
-
-func (f *loginFormData) PopulateLogin(a *model.Login) {
-	a.Email = strings.TrimSpace(f.Email)
-	a.Password = strings.TrimSpace(f.Password)
-	a.Remember = f.Remember
-	// a.Remember = f.Remember == "on"
-}
-
-func (s *Server) validateUserLogin(
-	ctx context.Context,
-	newlogin *model.Login,
-) ([]string, *model.User, *model.Session) {
-	logger := logging.FromContext(ctx).Named("validateUserLogin")
-	var theUser *model.User
-	var dbSession *model.Session
-
-	errors := newlogin.Validate()
-	if len(errors) > 0 {
-		return errors, theUser, dbSession
-	}
-
-	db := database.NewUserDB(s.env.Database())
-	theUser, err := db.ByEmail(ctx, newlogin.Email)
-	if err != nil {
-		logger.Errorf("get user by email failed: %v", err)
-		return []string{"encountered error searching user by email"}, theUser, dbSession
-	}
-
-	if theUser == nil {
-		return []string{"that email could not be found"}, theUser, dbSession
-	}
-
-	err = util.MatchPassword(theUser.PasswordHash, newlogin.Password)
-	if err != nil {
-		return []string{"invalid password provided"}, theUser, dbSession
-	}
-
-	if theUser.Status.IsUnverified() {
-		return []string{"user is unverified"}, theUser, dbSession
-	}
-
-	if !theUser.Status.IsActive() {
-		return []string{"user is inactive"}, theUser, dbSession
-	}
-
-	dbSession = &model.Session{
-		IPAddress:       ctxhelper.IPAddress(ctx),
-		LastRefreshedAt: time.Now(),
-		ExpiresAt:       null.TimeFrom(time.Now().Add(time.Hour * time.Duration(3))),
-		UserAgent:       ctxhelper.UserAgent(ctx),
-		UserID:          theUser.ID,
-	}
-
-	sessionDB := database.NewSessionDB(s.env.Database())
-	if err := sessionDB.Save(ctx, dbSession); err != nil {
-		logger.Errorf("failed to insert user session: %v", err)
-		return []string{"could not save session in db"}, theUser, dbSession
-	}
-	return []string{}, theUser, dbSession
-}
-
-func (s *Server) HandleAPILogin(sessionAuthenticator auth.SessionAuthenticator) func(c *gin.Context) {
+func (s *Server) HandleLogin(sessionAuthenticator auth.SessionAuthenticator) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handleAPILogin")
+
 		var form loginFormData
 		err := c.ShouldBindJSON(&form)
 		if err != nil {
-			logger.Errorf("bad login form: %v", err)
 			c.JSON(http.StatusBadRequest, map[string]interface{}{
 				"success": false,
 				"message": "invalid form provided",
@@ -124,19 +53,80 @@ func (s *Server) HandleAPILogin(sessionAuthenticator auth.SessionAuthenticator) 
 			return
 		}
 
-		newlogin := model.NewLogin()
-		form.PopulateLogin(newlogin)
-
-		errors, theUser, theSession := s.validateUserLogin(ctx, newlogin)
-		if len(errors) > 0 {
+		db := repos.NewUserDB(s.env.Database())
+		theUser, err := db.ByEmail(ctx, form.Email)
+		if err != nil {
+			logger.Errorf("get user by email failed: %v", err)
 			c.JSON(http.StatusInternalServerError, map[string]interface{}{
 				"success": false,
-				"message": fmt.Sprintf("could not login: %v", strings.Join(errors, ",")),
+				"message": "encountered error searching user by email",
 			})
 			return
 		}
 
-		tokenValue, _ := sessionAuthenticator.SetUserSessionInResponse(c.Writer, theUser, theSession)
+		if theUser == nil {
+			c.JSON(http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": "invalid email provided",
+			})
+			return
+		}
+
+		err = util.MatchPassword(theUser.PasswordHash, form.Password)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "invalid password provided",
+			})
+			return
+		}
+
+		if theUser.Status.IsUnverified() {
+			c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "user is unverified",
+			})
+			return
+		}
+
+		if !theUser.Status.IsActive() {
+			c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "user is inactive",
+			})
+			return
+		}
+
+		theSession := &entities.Session{
+			IPAddress:       ctxhelper.IPAddress(ctx),
+			LastRefreshedAt: time.Now(),
+			ExpiresAt:       null.TimeFrom(time.Now().Add(time.Hour * time.Duration(3))),
+			UserAgent:       ctxhelper.UserAgent(ctx),
+			UserID:          theUser.ID,
+		}
+
+		sessionDB := repos.NewSessionDB(s.env.Database())
+		if err := sessionDB.Save(ctx, theSession); err != nil {
+			logger.Errorf("failed to insert user session: %v", err)
+			c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "session could not be saved",
+			})
+			return
+		}
+
+		tokenValue, err := sessionAuthenticator.SetUserSessionInResponse(c.Writer, theUser, theSession)
+		if err != nil {
+			logger.Errorf("failed to set session in response: %v", err)
+			c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "session could not set in response",
+			})
+			return
+		}
+
+		c.SetCookie("auth-token", tokenValue, 60*60, "/", "localhost", false, true)
+
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"user":    theUser,
@@ -145,65 +135,14 @@ func (s *Server) HandleAPILogin(sessionAuthenticator auth.SessionAuthenticator) 
 	}
 }
 
-func (s *Server) validateUserRegistration(ctx context.Context, newUser *model.User) []string {
-	logger := logging.FromContext(ctx).Named("validateUserRegistration")
-	errors := newUser.Validate()
-	if len(errors) > 0 {
-		return errors
-	}
-	db := database.NewUserDB(s.env.Database())
-	theUser, err := db.ByEmail(ctx, newUser.Email)
-	if err != nil {
-		logger.Errorf("get user by email failed: %v", err)
-		return []string{"encountered error searching user by email"}
-	}
-
-	if theUser != nil {
-		return []string{"that email is already registered"}
-	}
-
-	if err := db.Save(ctx, newUser); err != nil {
-		logger.Errorf("failed to insert user when registering: %v", err)
-		return []string{"encountered an error registering user"}
-	}
-	return []string{}
-}
-
-func (s *Server) HandleRegisterProcess() func(c *gin.Context) {
+func (s *Server) HandleRegister() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		m := getTemplateMap(c)
-
-		var form registerFormData
-		err := c.ShouldBind(&form)
-		if err != nil {
-			ErrorPage(c, err.Error())
-			return
-		}
-
-		newUser := model.NewUser()
-		form.PopulateUser(newUser)
-
-		errors := s.validateUserRegistration(ctx, newUser)
-		if len(errors) > 0 {
-			m.AddErrors(errors...)
-			c.HTML(http.StatusOK, "register", m)
-			return
-		}
-
-		c.Redirect(http.StatusMovedPermanently, "/login")
-	}
-}
-
-func (s *Server) HandleAPIRegister() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handleAPIRegister")
 
 		var form registerFormData
 		err := c.ShouldBindJSON(&form)
 		if err != nil {
-			logger.Errorf("bad form: %v", err)
+			logger.Errorf("failed to bind form: %v", err)
 			c.JSON(http.StatusBadRequest, map[string]interface{}{
 				"success": false,
 				"message": "invalid form provided",
@@ -211,10 +150,18 @@ func (s *Server) HandleAPIRegister() func(c *gin.Context) {
 			return
 		}
 
-		newUser := model.NewUser()
-		form.PopulateUser(newUser)
+		newUser := &entities.User{
+			Email:           strings.ToLower(form.Email),
+			FirstName:       cases.Title(language.English, cases.Compact).String(form.FirstName),
+			LastName:        cases.Title(language.English, cases.Compact).String(form.LastName),
+			Status:          "inactive",
+			EmailVerified:   false,
+			Password:        form.Password,
+			PasswordConfirm: form.PasswordConfirm,
+			PasswordHash:    util.GeneratePasswordHash(form.Password),
+		}
 
-		errors := s.validateUserRegistration(ctx, newUser)
+		errors := newUser.Validate()
 		if len(errors) > 0 {
 			c.JSON(http.StatusInternalServerError, map[string]interface{}{
 				"success": false,
@@ -223,8 +170,37 @@ func (s *Server) HandleAPIRegister() func(c *gin.Context) {
 			return
 		}
 
+		db := repos.NewUserDB(s.env.Database())
+		theUser, err := db.ByEmail(ctx, newUser.Email)
+		if err != nil {
+			logger.Errorf("get user by email failed: %v", err)
+			c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "encountered error searching user by email",
+			})
+			return
+		}
+
+		if theUser != nil {
+			c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "that email is already registered",
+			})
+			return
+		}
+
+		if err := db.Save(ctx, newUser); err != nil {
+			logger.Errorf("failed to insert user when registering: %v", err)
+			c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "encountered an error registering user",
+			})
+			return
+		}
+
 		c.JSON(http.StatusCreated, gin.H{
 			"success": true,
+			"message": "check your email for activation code",
 			"data":    newUser,
 		})
 	}
@@ -233,11 +209,10 @@ func (s *Server) HandleAPIRegister() func(c *gin.Context) {
 func (s *Server) HandleApiLogoutUser() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handleApiLogoutUser")
 
 		tokenInfo := ctxhelper.TokenInfo(ctx)
 
-		db := database.NewSessionDB(s.env.Database())
+		db := repos.NewSessionDB(s.env.Database())
 		session, err := db.GetSessionByID(ctx, tokenInfo.SessionID)
 		if err != nil {
 			logger.Errorf("failed to get session by id %v, %v", tokenInfo.SessionID, err)

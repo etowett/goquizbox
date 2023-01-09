@@ -3,6 +3,11 @@
 
   /** @type {import('./$types').PageData} */
 	export let data;
+
+  function handleVote(voteType, questionId) {
+    alert({voteType, questionId});
+    // const response = api.get(`/questions/${questionId}/vote/${voteType}`)
+  }
 </script>
 
 <svelte:head>
@@ -21,7 +26,7 @@
         <h3><a href="/questions/{question.id}">{question.title}</a></h3>
         <small>
           By {question.user_id} asked {question.created_at}
-          <a href="/questions/{question.id}/vote?act=up&kind=question">Upvote</a> |
+          <a href={null} on:click={() => handleVote("up", `${question.id}`)}>Upvote</a> |
           <a href="/questions/{question.id}/vote?act=down&kind=question">Downvote</a> |
         </small>
         <hr />

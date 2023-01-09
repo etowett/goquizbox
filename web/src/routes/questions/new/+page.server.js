@@ -21,7 +21,7 @@ export const actions = {
 		}, locals.user.token);
 
 		if (!response.success) {
-			return fail(401, response);
+			return fail(401, {errors: [response.message]});
 		}
 
 		throw redirect(307, '/');

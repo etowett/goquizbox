@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strings"
 
+	"goquizbox/internal/logger"
 	"goquizbox/internal/util"
 	"goquizbox/internal/web/auth"
 	"goquizbox/internal/web/ctxhelper"
-	"goquizbox/pkg/logging"
 
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
@@ -67,9 +67,7 @@ func setupAppContext(
 	sessionAuthenticator auth.SessionAuthenticator,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("setupAppContext")
 
 		ipAddress, err := getIP(c.Request)
 		if err != nil {

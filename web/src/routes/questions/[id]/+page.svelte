@@ -25,6 +25,7 @@
 <div class="row">
   <div class="col-md-8 col-md-offset-2">
     <h4>Answers</h4>
+    {#if $page.data.user}
     <form use:enhance method="POST" action="?/createAnswer">
       <div class="form-group">
         <textarea class="form-control" name="body" id="body" cols="10" rows="5" placeholder="Answer"></textarea>
@@ -32,13 +33,14 @@
       <button type="submit" class="btn btn-primary">Post your Answer</button>
     </form>
     <hr />
+    {/if}
     <div class="answers">
-      {#if data.answers !== null }
+      {#if data.answers.length > 0 }
         {#each data.answers as answer (answer.id)}
           <div class="answer">
               <div>{answer.body}</div>
               <small>
-                By {answer.user_id} answered {answer.created_at} <a href="#">Upvote</a> | <a href="#">Downvote</a>
+                By {answer.user_id} answered {answer.created_at} <a href={null}>Upvote</a> | <a href={null}>Downvote</a>
             </small>
             <hr />
           </div>

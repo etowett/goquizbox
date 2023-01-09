@@ -5,11 +5,9 @@ import (
 	"context"
 	"fmt"
 
-	"goquizbox/internal/metrics"
+	"goquizbox/internal/database"
+	"goquizbox/internal/logger"
 	"goquizbox/internal/serverenv"
-	"goquizbox/pkg/database"
-	"goquizbox/pkg/logging"
-	"goquizbox/pkg/observability"
 
 	envconfig "github.com/sethvargo/go-envconfig"
 )
@@ -18,12 +16,6 @@ import (
 // All binaries in this application connect to the database via the same method.
 type DatabaseConfigProvider interface {
 	DatabaseConfig() *database.Config
-}
-
-// ObservabilityExporterConfigProvider signals that the config knows how to configure an
-// observability exporter.
-type ObservabilityExporterConfigProvider interface {
-	ObservabilityExporterConfig() *observability.Config
 }
 
 // Setup runs common initialization code for all servers. See SetupWith.
@@ -40,7 +32,6 @@ func SetupWith(
 	config interface{},
 	l envconfig.Lookuper,
 ) (*serverenv.ServerEnv, error) { //nolint:golint
-	logger := logging.FromContext(ctx).Named("Setup")
 
 	// Build a list of mutators. This list will grow as we initialize more of the
 	// configuration, such as the secret manager.
@@ -49,34 +40,11 @@ func SetupWith(
 	// Build a list of options to pass to the server env.
 	var serverEnvOpts []serverenv.Option
 
-	// Append default metrics.
-	serverEnvOpts = append(serverEnvOpts, serverenv.WithMetricsExporter(metrics.NewLogsBasedFromContext))
-
 	// Process first round of environment variables.
 	if err := envconfig.ProcessWith(ctx, config, l, mutatorFuncs...); err != nil {
 		return nil, fmt.Errorf("error loading environment variables: %w", err)
 	}
-	logger.Infow("redis", "config", config)
-
-	// Configure and initialize the observability exporter.
-	if provider, ok := config.(ObservabilityExporterConfigProvider); ok {
-		logger.Info("configuring observability exporter")
-
-		oeConfig := provider.ObservabilityExporterConfig()
-		oe, err := observability.NewFromEnv(ctx, oeConfig)
-		if err != nil {
-			return nil, fmt.Errorf("unable to create observability provider: %w", err)
-		}
-		if err := oe.StartExporter(); err != nil {
-			return nil, fmt.Errorf("failed to start observability: %w", err)
-		}
-		exporter := serverenv.WithObservabilityExporter(oe)
-
-		// Update serverEnv setup.
-		serverEnvOpts = append(serverEnvOpts, exporter)
-
-		logger.Infow("observability", "config", oeConfig)
-	}
+	logger.Infof("redis config: %v", config)
 
 	// Setup the database connection.
 	if provider, ok := config.(DatabaseConfigProvider); ok {
@@ -91,7 +59,7 @@ func SetupWith(
 		// Update serverEnv setup.
 		serverEnvOpts = append(serverEnvOpts, serverenv.WithDatabase(db))
 
-		logger.Infow("database", "config", dbConfig)
+		logger.Infof("database config: %v", dbConfig)
 	}
 
 	return serverenv.New(ctx, serverEnvOpts...), nil

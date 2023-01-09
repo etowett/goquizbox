@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"goquizbox/internal/buildinfo"
-	"goquizbox/internal/repo/database"
-	"goquizbox/pkg/logging"
+	"goquizbox/internal/logger"
+	"goquizbox/internal/repos"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,28 +17,25 @@ import (
 func (s *Server) HandleHealthz() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("handleHealthz")
 
 		hostName, err := os.Hostname()
 		if err != nil {
 			logger.Errorf("could not get hostname: %v", err)
 		}
 
-		db := s.env.Database()
-
-		conn, err := db.Pool.Acquire(ctx)
+		conn, err := s.env.Database().Pool.Acquire(ctx)
 		if err != nil {
-			logger.Errorw("failed to acquire database connection", "error", err)
+			logger.Errorf("failed to acquire database connection: 5v", err)
 		}
 		defer conn.Release()
 
 		dbUp := true
 		if err := conn.Conn().Ping(ctx); err != nil {
 			dbUp = false
-			logger.Errorw("failed to ping database", "error", err)
+			logger.Errorf("failed to ping database: %v", err)
 		}
 
-		checkDB := database.NewCheckerDB(s.env.Database())
+		checkDB := repos.NewCheckerDB(s.env.Database())
 		hello, err := checkDB.SelectOne(ctx)
 		if err != nil {
 			logger.Errorf("could not db select 1: %v", err)

@@ -7,30 +7,27 @@ import (
 	"syscall"
 
 	"goquizbox/internal/app"
-	"goquizbox/internal/buildinfo"
+	"goquizbox/internal/logger"
+	"goquizbox/internal/server"
 	"goquizbox/internal/setup"
-	"goquizbox/pkg/logging"
-	"goquizbox/pkg/server"
 )
 
 func main() {
 	ctx, done := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 
-	logger := logging.NewLoggerFromEnv().
-		With("build_id", buildinfo.BuildID).
-		With("build_tag", buildinfo.BuildTag)
-	ctx = logging.WithLogger(ctx, logger)
+	logger.MustInit()
+	defer logger.Flush()
 
 	defer func() {
 		done()
 		if r := recover(); r != nil {
-			logger.Fatalw("application panic", "panic", r)
+			logger.Fatalf("application panic: %v", r)
 		}
 	}()
 
 	err := realMain(ctx)
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatal(err.Error())
 	}
 
 	done()
@@ -39,8 +36,6 @@ func main() {
 }
 
 func realMain(ctx context.Context) error {
-	logger := logging.FromContext(ctx)
-
 	var config app.Config
 	env, err := setup.Setup(ctx, &config)
 	if err != nil {

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"goquizbox/internal/repo/database"
+	"goquizbox/internal/logger"
+	"goquizbox/internal/repos"
 	"goquizbox/internal/serverenv"
 	"goquizbox/internal/web/ctxhelper"
-	"goquizbox/pkg/logging"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,7 +20,6 @@ func AllowOnlyActiveUser(
 	return func(c *gin.Context) {
 
 		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("allowOnlyActiveUser")
 
 		err := validateSession(c, sessionAuthenticator, env)
 		if err != nil {
@@ -57,9 +56,6 @@ func AllowWithSession(
 ) func(c *gin.Context) {
 
 	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-		logger := logging.FromContext(ctx).Named("allowWithSession")
-
 		err := validateSession(c, sessionAuthenticator, env)
 		if err != nil {
 			logger.Errorf("could not validate session: %v", err)
@@ -84,7 +80,7 @@ func validateSession(
 
 	// TODO: Add caching here to prevent db lookup each time
 
-	sessionDB := database.NewSessionDB(env.Database())
+	sessionDB := repos.NewSessionDB(env.Database())
 	session, err := sessionDB.GetFullSessionByID(ctx, tokenInfo.SessionID)
 	if err != nil {
 		return fmt.Errorf("failed to get full session for id %v - %v", tokenInfo.SessionID, err)
@@ -107,68 +103,4 @@ func validateSession(
 	}
 
 	return nil
-}
-
-// func AllowOnlyValidApiKey(
-// 	dB db.DB,
-// 	apiKeyService services.ApiKeyService,
-// ) func(c *gin.Context) {
-
-// 	return func(c *gin.Context) {
-
-// 		strategy := "basic_auth"
-// 		var username, password string
-
-// 		auth := strings.SplitN(c.Request.Header.Get("Authorization"), " ", 2)
-// 		if len(auth) != 2 || auth[0] != "Basic" {
-// 			strategy = "url_params"
-// 		}
-
-// 		switch strategy {
-// 		case "basic_auth":
-// 			payload, err := base64.StdEncoding.DecodeString(auth[1])
-// 			if err != nil {
-// 				respondWithError(c, 401, "Unauthorized. Basic Authentication required.")
-// 				return
-// 			}
-
-// 			pair := strings.SplitN(string(payload), ":", 2)
-// 			if len(pair) != 2 {
-// 				respondWithError(c, 401, "Unauthorized. Basic Authentication required, given auth not correct.")
-// 				return
-// 			}
-
-// 			username = pair[0]
-// 			password = pair[1]
-// 		case "url_params":
-// 			username = c.Query("username")
-// 			password = c.Query("password")
-
-// 			if username == "" || password == "" {
-// 				respondWithError(c, 401, "Unauthorized. Authentication required.")
-// 				return
-// 			}
-
-// 		default:
-// 			respondWithError(c, 401, "Unauthorized. Authentication required.")
-// 			return
-// 		}
-
-// 		ctx := c.Request.Context()
-// 		cachedApiKey, err := apiKeyService.ValidateApiKey(ctx, dB, username, password)
-// 		if err != nil {
-// 			logger.Errorf("Failed to validate api key: %v", err)
-// 			respondWithError(c, 500, "Unable to perform request")
-// 			return
-// 		}
-
-// 		ctx = ctxhelper.WithTokenInfo(ctx, &entities.TokenInfo{UserID: cachedApiKey.UserID})
-// 		c.Request = c.Request.WithContext(ctx)
-// 		c.Next()
-// 	}
-// }
-
-func respondWithError(c *gin.Context, code int, message string) {
-	c.JSON(code, map[string]interface{}{"success": false, "message": message})
-	c.Abort()
 }

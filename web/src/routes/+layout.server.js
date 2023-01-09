@@ -1,4 +1,3 @@
-import * as api from '$lib/api.js';
 
 /** @type {import('./$types').LayoutServerLoad} */
 export function load({ locals }) {
@@ -11,20 +10,3 @@ export function load({ locals }) {
 		}
 	};
 }
-
-/** @type {import('./$types').Actions} */
-export const actions = {
-	logout: async ({ cookies, locals }) => {
-		if (!locals.user) throw redirect(307, '/login');
-
-    const response = await api.del('users/logout', locals.user.token);
-
-    if (!response.success) {
-			return fail(401, response.message);
-    }
-
-		cookies.delete('jwt', { path: '/' });
-		locals.user = null;
-		throw redirect(307, '/');
-	},
-};

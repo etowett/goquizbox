@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"goquizbox/internal/entities"
-	"goquizbox/internal/repo/model"
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"golang.org/x/text/language"
@@ -14,7 +13,7 @@ import (
 
 type (
 	JWTHandler interface {
-		CreateUserToken(*model.User, *model.Session) (string, error)
+		CreateUserToken(*entities.User, *entities.Session) (string, error)
 		TokenInfo(tokenValue string) (*entities.TokenInfo, error)
 	}
 
@@ -42,8 +41,8 @@ func NewJWTHandlerWithSigningKey(signingKey string) JWTHandler {
 }
 
 func (h *AppJWTHandler) CreateUserToken(
-	user *model.User,
-	session *model.Session,
+	user *entities.User,
+	session *entities.Session,
 ) (string, error) {
 
 	token := jwt.New(jwt.SigningMethodHS256)

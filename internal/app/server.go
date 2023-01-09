@@ -29,7 +29,6 @@ func NewServer(config *Config, env *serverenv.ServerEnv) (*Server, error) {
 }
 
 func (s *Server) Routes(ctx context.Context) http.Handler {
-	// mux := gin.Default()
 	mux := gin.New()
 
 	// Recovery middleware recovers from any panics and writes a 500 if there was one.
@@ -42,19 +41,15 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 
 	// Healthz page
 	mux.GET("/healthz", s.HandleHealthz())
-	mux.HEAD("/healthz", s.HandleHealthz())
-
-	// privateRoutes.GET("/questions/:id", s.HandleGetQuestion())
-	// privateRoutes.GET("/questions/:id/vote", s.HandleQuestionVote())
 
 	apiRoutes := mux.Group("/api/v1")
 	{
-		apiRoutes.POST("users", s.HandleAPIRegister())
-		apiRoutes.POST("users/login", s.HandleAPILogin(sessionAuthenticator))
-		apiRoutes.GET("/users", s.HandleApiListUsers())
-		apiRoutes.GET("/users/:id", s.HandleApiGetUser())
+		apiRoutes.POST("users", s.HandleRegister())
+		apiRoutes.POST("auth/login", s.HandleLogin(sessionAuthenticator))
+		apiRoutes.GET("/users", s.HandleListUsers())
+		apiRoutes.GET("/users/:id", s.HandleGetUser())
 
-		apiRoutes.GET("/questions", s.HandleApiListQuestions())
+		apiRoutes.GET("/questions", s.HandleListQuestions())
 		apiRoutes.GET("/questions/:id", s.HandleApiGetQuestion())
 		apiRoutes.GET("/questions/:id/answers", s.HandleApiGetQuestionAnswers())
 
@@ -66,7 +61,7 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 		{
 			securedApiRoutes.PUT("/users/:id", s.HandleApiUpdateUser())
 			securedApiRoutes.DELETE("/users/:id", s.HandleApiDeleteUser())
-			securedApiRoutes.DELETE("/users/logout", s.HandleApiLogoutUser())
+			securedApiRoutes.DELETE("/auth/logout", s.HandleApiLogoutUser())
 
 			securedApiRoutes.POST("/questions", s.HandleApiAddQuestion())
 			securedApiRoutes.POST("/questions/:id/answers", s.HandleApiAddQuestionAnswer())

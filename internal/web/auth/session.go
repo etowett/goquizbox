@@ -5,8 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"goquizbox/internal/entities"
-	"goquizbox/internal/repo/database"
-	"goquizbox/internal/repo/model"
+	"goquizbox/internal/repos"
 	"goquizbox/internal/serverenv"
 	"net/http"
 	"time"
@@ -20,9 +19,9 @@ var ErrTokenNotProvided = errors.New("token not provided")
 
 type SessionAuthenticator interface {
 	RefreshTokenFromRequest(ctx context.Context, tokenInfo *entities.TokenInfo, w http.ResponseWriter) (string, error)
-	SetUserSessionInResponse(w http.ResponseWriter, user *model.User, session *model.Session) (string, error)
+	SetUserSessionInResponse(w http.ResponseWriter, user *entities.User, session *entities.Session) (string, error)
 	TokenInfoFromRequest(req *http.Request) (*entities.TokenInfo, error)
-	UserByID(ctx context.Context, userID int64) (*model.User, error)
+	UserByID(ctx context.Context, userID int64) (*entities.User, error)
 }
 
 type AppSessionAuthenticator struct {
@@ -53,7 +52,7 @@ func (a *AppSessionAuthenticator) RefreshTokenFromRequest(
 	w http.ResponseWriter,
 ) (string, error) {
 
-	sessionDB := database.NewSessionDB(a.env.Database())
+	sessionDB := repos.NewSessionDB(a.env.Database())
 	session, err := sessionDB.GetSessionByID(ctx, tokenInfo.SessionID)
 	if err != nil {
 		return "", fmt.Errorf("failed to find session by id=[%v]: %v", tokenInfo.SessionID, err)
@@ -63,7 +62,7 @@ func (a *AppSessionAuthenticator) RefreshTokenFromRequest(
 		return "", fmt.Errorf("failed to refresh session by id=[%v], deactivated ", tokenInfo.SessionID)
 	}
 
-	db := database.NewUserDB(a.env.Database())
+	db := repos.NewUserDB(a.env.Database())
 	user, err := db.GetByID(ctx, session.UserID)
 	if err != nil {
 		return "", fmt.Errorf("failed to find user by id=[%v]: %v", session.UserID, err)
@@ -85,8 +84,8 @@ func (a *AppSessionAuthenticator) RefreshTokenFromRequest(
 
 func (a *AppSessionAuthenticator) SetUserSessionInResponse(
 	w http.ResponseWriter,
-	user *model.User,
-	session *model.Session,
+	user *entities.User,
+	session *entities.Session,
 ) (string, error) {
 
 	tokenValue, err := a.jwtHandler.CreateUserToken(user, session)
@@ -113,9 +112,9 @@ func (a *AppSessionAuthenticator) TokenInfoFromRequest(
 func (a *AppSessionAuthenticator) UserByID(
 	ctx context.Context,
 	userID int64,
-) (*model.User, error) {
+) (*entities.User, error) {
 
-	db := database.NewUserDB(a.env.Database())
+	db := repos.NewUserDB(a.env.Database())
 	user, err := db.GetByID(ctx, userID)
 	if err != nil {
 		return user, fmt.Errorf("failed to find user by id=[%v]: %v", userID, err)

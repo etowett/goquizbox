@@ -14,9 +14,6 @@ services:
       - DB_HOST=host.docker.internal
       - DB_PORT=5432
       - DB_SSLMODE=disable
-      - REDIS_HOST=redis
-      - REDIS_PASSWORD=pass1234
-      - REDIS_PORT=6379
       - LOG_LEVEL=debug
       - LOG_MODE=development
       - ENV=local
